@@ -1,5 +1,6 @@
 data/nodes.jsonl
 data/metadata.jsonl
+data/keyword_smoke_test.txt
 __pycache__/
 *.py[cod]
 .DS_Store
