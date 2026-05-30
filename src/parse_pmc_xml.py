@@ -181,10 +181,12 @@ def _abstract(article_meta: ET.Element | None) -> str:
         return ""
     abstracts = []
     for element in _children(article_meta, "abstract"):
+        if element.attrib.get("abstract-type"):
+            continue
         text = _clean_text(_iter_text(element))
         if text:
             abstracts.append(text)
-    return "\n\n".join(abstracts)
+    return _strip_abstract_label("\n\n".join(abstracts))
 
 
 def _first(element: ET.Element | None, tag_name: str) -> ET.Element | None:
@@ -249,10 +251,27 @@ def _normalize_title(title: str) -> str:
     return re.sub(r"\s+", " ", title.casefold()).strip()
 
 
+def _strip_abstract_label(text: str) -> str:
+    return re.sub(r"^Abstract\s+", "", text).strip()
+
+
 def _clean_text(text: str | None) -> str:
     if not text:
         return ""
-    return re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"([.!?])\s+(?:[,;]\s*)+", r"\1 ", text)
+    text = re.sub(r"(?:^|\s)(?:[,;]\s*){2,}", " ", text)
+    text = re.sub(
+        r"\(\s*(?:(?:Figure|Fig\.?|Table)\s*[,;]?\s*|\b(?:and|or)\b\s*)+\)",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(r"\(\s*(?:Figure|Fig\.?|Table)\s*\)", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\(\s*(?:and|or|,|;|\s)+\)", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+([,;:.!?])", r"\1", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
 
 
 def _local_name(tag: str) -> str:

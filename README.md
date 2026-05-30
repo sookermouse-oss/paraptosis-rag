@@ -14,6 +14,7 @@ It parses article metadata, abstract text, and body sections, chunks each sectio
 
 ```bash
 data/nodes.jsonl
+data/metadata.jsonl
 ```
 
 No embeddings, OpenAI API calls, OpenAI Vector Store, or Qdrant integration are used.
@@ -49,5 +50,7 @@ Each JSONL row contains at least:
 - `section_title`
 - `section_index`
 - `source_file`
+
+Article-level metadata, including `authors` and `abstract`, is written once per article to `data/metadata.jsonl`.
 
 The raw XML files are read in place and are not modified.

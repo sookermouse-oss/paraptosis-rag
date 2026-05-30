@@ -1,3 +1,5 @@
 data/nodes.jsonl
+data/metadata.jsonl
 __pycache__/
 *.py[cod]
+.DS_Store
