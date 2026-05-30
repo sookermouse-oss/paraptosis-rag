@@ -17,7 +17,7 @@ data/nodes.jsonl
 data/metadata.jsonl
 ```
 
-No embeddings, OpenAI API calls, OpenAI Vector Store, or Qdrant integration are used.
+No OpenAI Vector Store or Qdrant integration is used.
 
 ## Setup
 
@@ -46,6 +46,17 @@ python3 src/search_nodes.py
 python3 src/search_nodes.py --query "calcium homeostasis" --top-k 5
 python3 src/search_nodes.py --query "paraptosis in breast cancer prognosis" --top-k 10 --exclude-section-type methods
 ```
+
+Build a local LlamaIndex `SimpleVectorStore` from `data/nodes.jsonl` with the HuggingFace biomedical embedding model `pritamdeka/S-PubMedBert-MS-MARCO`:
+
+```bash
+python3 src/llamaindex_retrieval.py build
+python3 src/llamaindex_retrieval.py search --query "How does ER stress induce paraptosis?" --top-k 10
+python3 src/llamaindex_retrieval.py search --query "paraptosis in breast cancer prognosis" --top-k 10 --exclude-section-type methods
+python3 src/llamaindex_retrieval.py benchmark --top-k 10 --exclude-section-type methods
+```
+
+The local LlamaIndex index is stored in `data/llamaindex_storage/`. This is a retriever only; it does not use OpenAI APIs, OpenAI Vector Store, Qdrant, chat agents, or RAG answering.
 
 Each JSONL row contains at least:
 

@@ -1,6 +1,9 @@
 data/nodes.jsonl
 data/metadata.jsonl
 data/keyword_smoke_test.txt
+data/embeddings.jsonl
+data/llamaindex_storage/
+.venv/
 __pycache__/
 *.py[cod]
 .DS_Store
