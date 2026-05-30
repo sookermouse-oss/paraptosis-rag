@@ -24,6 +24,71 @@ CHUNK_OVERLAP_CHARS = 600
 MIN_TEXT_CHARS = 100
 LEADING_SECTION_NUMBER_RE = re.compile(r"^\s*\d{1,2}(?:\.\d{1,3})*\.?\s+")
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?;:])\s+|\n+")
+RESULTS_OVERRIDE_TERMS = (
+    "oncogenic role",
+    "triggered",
+    "induced",
+    "disrupted",
+    "predicts",
+)
+SECTION_TYPE_TERMS = {
+    "conclusion": ("conclusion", "conclusions"),
+    "discussion": ("discussion", "future perspective"),
+    "intro": ("introduction", "background"),
+    "methods": (
+        "method",
+        "material",
+        "microscopy",
+        "transmission electron microscopy",
+        "immune infiltration landscape",
+        "tumor mutational analysis",
+        "drug sensitivity analysis",
+        "using scrna-seq",
+        "cell culture",
+        "western blot",
+        "western blotting",
+        "flow cytometry",
+        "statistical",
+        "statistical analysis",
+        "assay",
+        "transwell",
+        "wound healing",
+        "data collection",
+        "sequencing",
+        "analysis",
+        "validation",
+        "nomogram",
+        "model",
+        "signature",
+        "cohort",
+        "database",
+    ),
+    "results": (
+        "result",
+        "finding",
+        "identification",
+        "identified",
+        "construction and validation",
+        "construction and validation of prrs",
+        "functional enrichment analysis",
+        "predicts",
+        "prrs predicts",
+        "profiling reveals",
+        "disrupted",
+        "triggered",
+        "enhanced",
+        "induced",
+        "identifying",
+        "oncogenic role",
+    ),
+}
+REVIEW_SECTION_TITLES = {
+    "paraptosis",
+    "ferroptosis",
+    "necroptosis",
+    "pyroptosis",
+    "autophagic cell death",
+}
 
 
 def build_nodes(
@@ -167,10 +232,36 @@ def _node_dict(
         "journal": article.get("journal"),
         "keywords": article.get("keywords", []),
         "section_title": section["section_title"],
+        "section_type": infer_section_type(section["section_title"]),
         "section_index": section_index,
         "chunk_index": chunk_index,
         "source_file": article["source_file"],
     }
+
+
+def infer_section_type(section_title: str) -> str:
+    title = section_title.casefold()
+    if _contains_any(title, SECTION_TYPE_TERMS["conclusion"]):
+        return "conclusion"
+    if _contains_any(title, SECTION_TYPE_TERMS["discussion"]):
+        return "discussion"
+    if _contains_any(title, SECTION_TYPE_TERMS["intro"]):
+        return "intro"
+    if _contains_any(title, RESULTS_OVERRIDE_TERMS) or _contains_any(title, SECTION_TYPE_TERMS["results"]):
+        return "results"
+    if _contains_any(title, SECTION_TYPE_TERMS["methods"]):
+        return "methods"
+    if _is_review_section(title):
+        return "review"
+    return "other"
+
+
+def _contains_any(text: str, terms: tuple[str, ...]) -> bool:
+    return any(term in text for term in terms)
+
+
+def _is_review_section(title: str) -> bool:
+    return title in REVIEW_SECTION_TITLES or title.startswith("non-apoptotic rcds")
 
 
 def _article_metadata(article: dict[str, Any]) -> dict[str, Any]:

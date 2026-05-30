@@ -39,6 +39,14 @@ Smoke test on the first 3 XML files:
 python3 src/build_nodes.py --limit 3
 ```
 
+Run local BM25 search tests:
+
+```bash
+python3 src/search_nodes.py
+python3 src/search_nodes.py --query "calcium homeostasis" --top-k 5
+python3 src/search_nodes.py --query "paraptosis in breast cancer prognosis" --top-k 10 --exclude-section-type methods
+```
+
 Each JSONL row contains at least:
 
 - `node_id`
@@ -48,6 +56,7 @@ Each JSONL row contains at least:
 - `year`
 - `journal`
 - `section_title`
+- `section_type`
 - `section_index`
 - `source_file`
 
