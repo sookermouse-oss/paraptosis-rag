@@ -101,7 +101,7 @@ def _collect_sections(
             text_parts.append(child_text)
 
     section_text = "\n\n".join(text_parts)
-    if section_text:
+    if section_text and not section_text.casefold().startswith("graphical abstract"):
         sections.append(
             {
                 "section_title": title,
@@ -259,6 +259,10 @@ def _clean_text(text: str | None) -> str:
     if not text:
         return ""
     text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"^(?:The\s+)?graphical abstract[^.!?]*[.!?]\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\(([A-Z][A-Za-z-]+\s+et\s+al\.)\s*\)", r"\1", text)
+    text = re.sub(r"([A-Z][A-Za-z-]+\s+et\s+al\.)\s*\)", r"\1", text)
+    text = re.sub(r"\(\s*(?:Fig\.?|Figure|Table)\s+[A-Za-z0-9]+\s*\)", "", text, flags=re.IGNORECASE)
     text = re.sub(r"([.!?])\s+(?:[,;]\s*)+", r"\1 ", text)
     text = re.sub(r"(?:^|\s)(?:[,;]\s*){2,}", " ", text)
     text = re.sub(
