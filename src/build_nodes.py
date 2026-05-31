@@ -23,6 +23,8 @@ CHUNK_SIZE_CHARS = 3600
 CHUNK_OVERLAP_CHARS = 600
 MIN_TEXT_CHARS = 100
 LEADING_SECTION_NUMBER_RE = re.compile(r"^\s*\d{1,2}(?:\.\d{1,3})*\.?\s+")
+CITATION_EMPTY_BRACKETS_RE = re.compile(r"\[\s*(?:[,;]\s*)*\]")
+CITATION_FIG_TABLE_RE = re.compile(r"\(\s*(?:Fig\.?|Figure|Table)\s*[A-Za-z0-9]*\s*\)", re.IGNORECASE)
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?;:])\s+|\n+")
 RESULTS_OVERRIDE_TERMS = (
     "oncogenic role",
@@ -114,11 +116,11 @@ def build_nodes(
         _make_document(article)
 
         for section in article["body_sections"]:
-            section_text = clean_leading_section_number(section["text"])
+            section_text = clean_citation_residue(clean_leading_section_number(section["text"]))
             if len("".join(section_text.split())) < MIN_TEXT_CHARS:
                 continue
             for chunk_index, chunk_text in enumerate(chunk_text_by_chars(section_text)):
-                chunk_text = clean_leading_section_number(chunk_text)
+                chunk_text = clean_citation_residue(clean_leading_section_number(chunk_text))
                 if len("".join(chunk_text.split())) < MIN_TEXT_CHARS:
                     continue
                 node_dict = _node_dict(article, section, chunk_text, chunk_index)
@@ -176,6 +178,18 @@ def split_sentences(text: str) -> list[str]:
 
 def clean_leading_section_number(text: str) -> str:
     return LEADING_SECTION_NUMBER_RE.sub("", text, count=1).strip()
+
+
+def clean_citation_residue(text: str) -> str:
+    text = CITATION_EMPTY_BRACKETS_RE.sub("", text)
+    text = CITATION_FIG_TABLE_RE.sub("", text)
+    text = re.sub(r"\b[Ss]upporting [Ii]nformation\b", "supplement", text)
+    text = re.sub(r"\b[Rr]eferences\b", "literature", text)
+    text = re.sub(r"\bet\s+al\.\.", "et al.", text)
+    text = re.sub(r"\(\s+", "(", text)
+    text = re.sub(r"\s+\)", ")", text)
+    text = re.sub(r"\s+([,;:.!?])", r"\1", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _overlap_sentences(sentences: list[str], overlap_chars: int) -> list[str]:

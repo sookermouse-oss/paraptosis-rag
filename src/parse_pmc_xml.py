@@ -20,18 +20,39 @@ SKIP_TEXT_TAGS = {
 }
 
 SKIP_SECTION_TITLES = {
+    "abbreviations",
+    "acknowledgments",
     "author contributions",
     "author contribution",
+    "author information",
+    "authors' contribution",
+    "authors’ contribution",
+    "availability of data and materials",
+    "competing interests",
     "conflict of interest statement",
+    "conflict of interest",
     "conflicts of interest",
+    "consent for publication",
+    "credit authorship contribution statement",
+    "data and code availability",
+    "data availability",
     "ethics statement",
+    "ethical statement",
+    "declarations",
+    "declaration of competing interest",
     "supporting information",
+    "supplementary information",
     "supplementary material",
     "declaration of generative ai",
     "data availability statement",
     "acknowledgements",
     "funding",
+    "funding information",
+    "informed consent statement",
+    "institutional review board statement",
+    "lead contact",
     "references",
+    "resource availability",
 }
 
 
@@ -260,9 +281,14 @@ def _clean_text(text: str | None) -> str:
         return ""
     text = re.sub(r"\s+", " ", text).strip()
     text = re.sub(r"^(?:The\s+)?graphical abstract[^.!?]*[.!?]\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\[\s*(?:[,;]\s*)*\]", "", text)
+    text = re.sub(r"\b[Ss]upporting [Ii]nformation\b", "supplement", text)
+    text = re.sub(r"\b[Rr]eferences\b", "literature", text)
     text = re.sub(r"\(([A-Z][A-Za-z-]+\s+et\s+al\.)\s*\)", r"\1", text)
     text = re.sub(r"([A-Z][A-Za-z-]+\s+et\s+al\.)\s*\)", r"\1", text)
+    text = re.sub(r"\bet\s+al\.\.", "et al.", text)
     text = re.sub(r"\(\s*(?:Fig\.?|Figure|Table)\s+[A-Za-z0-9]+\s*\)", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\(\s*(?:Fig\.?|Figure|Table)\s*\)", "", text, flags=re.IGNORECASE)
     text = re.sub(r"([.!?])\s+(?:[,;]\s*)+", r"\1 ", text)
     text = re.sub(r"(?:^|\s)(?:[,;]\s*){2,}", " ", text)
     text = re.sub(
@@ -273,7 +299,10 @@ def _clean_text(text: str | None) -> str:
     )
     text = re.sub(r"\(\s*(?:Figure|Fig\.?|Table)\s*\)", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\(\s*(?:and|or|,|;|\s)+\)", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\(\s+", "(", text)
+    text = re.sub(r"\s+\)", ")", text)
     text = re.sub(r"\s+([,;:.!?])", r"\1", text)
+    text = re.sub(r"\s+([)])", r"\1", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
