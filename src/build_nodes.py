@@ -25,6 +25,10 @@ MIN_TEXT_CHARS = 100
 LEADING_SECTION_NUMBER_RE = re.compile(r"^\s*\d{1,2}(?:\.\d{1,3})*\.?\s+")
 CITATION_EMPTY_BRACKETS_RE = re.compile(r"\[\s*(?:[,;]\s*)*\]")
 CITATION_FIG_TABLE_RE = re.compile(r"\(\s*(?:Fig\.?|Figure|Table)\s*[A-Za-z0-9]*\s*\)", re.IGNORECASE)
+CITATION_TRAILING_FIG_TABLE_RE = re.compile(
+    r"\b(?:Suppl\.?|Supplementary|Supplemental)?\s*(?:Fig\.?|Figure|Table)\s*\)\.",
+    re.IGNORECASE,
+)
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?;:])\s+|\n+")
 RESULTS_OVERRIDE_TERMS = (
     "oncogenic role",
@@ -183,6 +187,7 @@ def clean_leading_section_number(text: str) -> str:
 def clean_citation_residue(text: str) -> str:
     text = CITATION_EMPTY_BRACKETS_RE.sub("", text)
     text = CITATION_FIG_TABLE_RE.sub("", text)
+    text = CITATION_TRAILING_FIG_TABLE_RE.sub("", text)
     text = re.sub(r"\b[Ss]upporting [Ii]nformation\b", "supplement", text)
     text = re.sub(r"\b[Rr]eferences\b", "literature", text)
     text = re.sub(r"\bet\s+al\.\.", "et al.", text)

@@ -33,6 +33,7 @@ SKIP_SECTION_TITLES = {
     "conflict of interest",
     "conflicts of interest",
     "consent for publication",
+    "credit authorship",
     "credit authorship contribution statement",
     "data and code availability",
     "data availability",
@@ -40,6 +41,11 @@ SKIP_SECTION_TITLES = {
     "ethical statement",
     "declarations",
     "declaration of competing interest",
+    "declaration of interest",
+    "declaration of interests",
+    "disclosure statement",
+    "disclosures",
+    "pre-publication history",
     "supporting information",
     "supplementary information",
     "supplementary material",
@@ -287,6 +293,7 @@ def _clean_text(text: str | None) -> str:
     text = re.sub(r"\(([A-Z][A-Za-z-]+\s+et\s+al\.)\s*\)", r"\1", text)
     text = re.sub(r"([A-Z][A-Za-z-]+\s+et\s+al\.)\s*\)", r"\1", text)
     text = re.sub(r"\bet\s+al\.\.", "et al.", text)
+    text = re.sub(r"\b(?:Suppl\.?|Supplementary|Supplemental)?\s*(?:Fig\.?|Figure|Table)\s*\)\.", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\(\s*(?:Fig\.?|Figure|Table)\s+[A-Za-z0-9]+\s*\)", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\(\s*(?:Fig\.?|Figure|Table)\s*\)", "", text, flags=re.IGNORECASE)
     text = re.sub(r"([.!?])\s+(?:[,;]\s*)+", r"\1 ", text)
