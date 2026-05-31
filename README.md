@@ -58,6 +58,24 @@ python3 src/llamaindex_retrieval.py benchmark --top-k 10 --exclude-section-type 
 
 The local LlamaIndex index is stored in `data/llamaindex_storage/`. This is a retriever only; it does not use OpenAI APIs, OpenAI Vector Store, Qdrant, chat agents, or RAG answering.
 
+Run hybrid retrieval with BM25 plus LlamaIndex embeddings. The default hybrid score uses BM25 weight `0.2`, embedding weight `0.8`, and single-source penalties for BM25-only and embedding-only hits:
+
+```bash
+python src/hybrid_retrieval.py \
+  --query "How does ER stress induce paraptosis?" \
+  --top-k 10 \
+  --exclude-section-type methods
+```
+
+Run the default five-query hybrid benchmark. Diversity is disabled by default; pass `--max-chunks-per-pmcid 2` to keep at most two chunks from the same PMCID:
+
+```bash
+python src/hybrid_retrieval.py \
+  --top-k 10 \
+  --exclude-section-type methods \
+  --max-chunks-per-pmcid 2
+```
+
 Each JSONL row contains at least:
 
 - `node_id`
