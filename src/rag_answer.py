@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,17 @@ DEFAULT_TOP_K = 8
 DEFAULT_OPENAI_MODEL = "gpt-5-mini"
 DEFAULT_EXCLUDED_SECTION_TYPES = ["methods"]
 MAX_CONTEXT_CHARS_PER_NODE = 1600
+CHINESE_CHAR_RE = re.compile(r"[\u4e00-\u9fff]")
+QUERY_NORMALIZATION_SYSTEM_PROMPT = """Rewrite the user's Chinese biomedical question into a concise English retrieval query for literature search.
+
+Rules:
+- Preserve biomedical entities, gene names, diseases, pathways, drugs, and abbreviations.
+- Translate faithfully and keep the original meaning.
+- Prefer a single concise English question or retrieval phrase.
+- Use standard biomedical English terminology.
+- Output only the rewritten English query.
+- Do not add quotes, bullets, explanations, or labels.
+"""
 
 
 SYSTEM_PROMPT = """You answer biomedical RAG questions using only the retrieved context.
@@ -56,6 +68,47 @@ def answer_query(
     save_context: bool = False,
     debug_context_path: Path = Path("data/debug_context.txt"),
 ) -> tuple[str, list[dict[str, Any]]]:
+    result = run_rag_pipeline(
+        query=query,
+        nodes_path=nodes_path,
+        storage_dir=storage_dir,
+        embedding_model=embedding_model,
+        openai_model=openai_model,
+        top_k=top_k,
+        exclude_section_types=exclude_section_types,
+        bm25_weight=bm25_weight,
+        embedding_weight=embedding_weight,
+        penalize_single_source=penalize_single_source,
+        bm25_only_penalty=bm25_only_penalty,
+        embedding_only_penalty=embedding_only_penalty,
+        max_context_chars=max_context_chars,
+        no_query_normalization=False,
+        show_context=show_context,
+        save_context=save_context,
+        debug_context_path=debug_context_path,
+    )
+    return result["answer"], result["evidence"]
+
+
+def run_rag_pipeline(
+    query: str,
+    nodes_path: Path,
+    storage_dir: Path,
+    embedding_model: str,
+    openai_model: str,
+    top_k: int,
+    exclude_section_types: list[str],
+    bm25_weight: float,
+    embedding_weight: float,
+    penalize_single_source: bool,
+    bm25_only_penalty: float,
+    embedding_only_penalty: float,
+    max_context_chars: int,
+    no_query_normalization: bool,
+    show_context: bool,
+    save_context: bool,
+    debug_context_path: Path,
+) -> dict[str, Any]:
     if not os.environ.get("OPENAI_API_KEY"):
         raise SystemExit("OPENAI_API_KEY is not set.")
 
@@ -63,11 +116,17 @@ def answer_query(
     nodes = filter_nodes(all_nodes, exclude_section_types)
     node_lookup = {node["node_id"]: node for node in all_nodes}
     index = load_index(storage_dir, embedding_model)
+    original_query = query
+    normalized_query = normalize_retrieval_query(
+        original_query,
+        openai_model,
+        no_query_normalization=no_query_normalization,
+    )
 
     _, _, results = hybrid_search(
         nodes=nodes,
         index=index,
-        query=query,
+        query=normalized_query,
         top_k=top_k,
         exclude_section_types=exclude_section_types,
         bm25_weight=bm25_weight,
@@ -78,14 +137,29 @@ def answer_query(
     )
     evidence = enrich_evidence(results, node_lookup, max_context_chars)
     if show_context:
-        print_context_debug(query, evidence)
+        print_context_debug(original_query, normalized_query, evidence)
     if save_context:
-        save_context_debug(debug_context_path, query, evidence)
+        save_context_debug(debug_context_path, original_query, normalized_query, evidence)
     if not evidence:
-        return "evidence insufficient", []
+        return {
+            "original_query": original_query,
+            "normalized_query": normalized_query,
+            "answer": insufficient_answer(original_query),
+            "evidence": [],
+        }
 
-    answer = call_openai(openai_model, query, evidence)
-    return answer, evidence
+    answer = call_openai(
+        openai_model,
+        original_query,
+        evidence,
+        normalized_query=normalized_query,
+    )
+    return {
+        "original_query": original_query,
+        "normalized_query": normalized_query,
+        "answer": answer,
+        "evidence": evidence,
+    }
 
 
 def enrich_evidence(
@@ -120,7 +194,18 @@ def pmcid_from_node_id(node_id: Any) -> str | None:
     return str(node_id).split(":", 1)[0]
 
 
-def call_openai(openai_model: str, query: str, evidence: list[dict[str, Any]]) -> str:
+def contains_chinese(text: str) -> bool:
+    return CHINESE_CHAR_RE.search(text) is not None
+
+
+def normalize_retrieval_query(
+    original_query: str,
+    openai_model: str,
+    no_query_normalization: bool,
+) -> str:
+    if no_query_normalization or not contains_chinese(original_query):
+        return original_query
+
     try:
         from openai import OpenAI
     except ImportError as exc:
@@ -129,14 +214,72 @@ def call_openai(openai_model: str, query: str, evidence: list[dict[str, Any]]) -
     client = OpenAI()
     response = client.responses.create(
         model=openai_model,
-        instructions=SYSTEM_PROMPT,
-        input=build_user_prompt(query, evidence),
+        instructions=QUERY_NORMALIZATION_SYSTEM_PROMPT,
+        input=original_query,
+        store=False,
+    )
+    normalized = cleanup_normalized_query(response.output_text)
+    if not normalized:
+        raise SystemExit("Failed to normalize the Chinese query into an English retrieval query.")
+    return normalized
+
+
+def cleanup_normalized_query(text: str) -> str:
+    cleaned = " ".join(text.split()).strip()
+    cleaned = re.sub(
+        r"^(?:retrieval query|normalized retrieval query|query)\s*:\s*",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = cleaned.strip(" \t\r\n\"'`")
+    return cleaned
+
+
+def answer_language_for_query(original_query: str) -> str:
+    return "Chinese" if contains_chinese(original_query) else "English"
+
+
+def insufficient_answer(original_query: str) -> str:
+    return "证据不足" if contains_chinese(original_query) else "evidence insufficient"
+
+
+def call_openai(
+    openai_model: str,
+    query: str,
+    evidence: list[dict[str, Any]],
+    normalized_query: str | None = None,
+) -> str:
+    try:
+        from openai import OpenAI
+    except ImportError as exc:
+        raise SystemExit("Missing OpenAI SDK. Install it with `pip install openai`.") from exc
+
+    client = OpenAI()
+    original_query = query
+    normalized_query = normalized_query or query
+    response = client.responses.create(
+        model=openai_model,
+        instructions=build_system_prompt(original_query),
+        input=build_user_prompt(original_query, normalized_query, evidence),
         store=False,
     )
     return response.output_text.strip()
 
 
-def build_user_prompt(query: str, evidence: list[dict[str, Any]]) -> str:
+def build_system_prompt(original_query: str) -> str:
+    answer_language = answer_language_for_query(original_query)
+    return "\n".join(
+        [
+            SYSTEM_PROMPT.strip(),
+            "",
+            f"The original query is in {answer_language}. Answer in {answer_language}.",
+            "Keep node_id citations in the original English format.",
+        ]
+    )
+
+
+def build_user_prompt(original_query: str, normalized_query: str, evidence: list[dict[str, Any]]) -> str:
     context_blocks = []
     for index, item in enumerate(evidence, start=1):
         context_blocks.append(
@@ -153,31 +296,40 @@ def build_user_prompt(query: str, evidence: list[dict[str, Any]]) -> str:
         )
     return "\n\n".join(
         [
-            f"Question: {query}",
+            f"Original query: {original_query}",
+            f"Normalized retrieval query: {normalized_query}",
             "Retrieved nodes:",
             "\n\n".join(context_blocks),
-            "Answer the question using only these nodes.",
-            'If the nodes are not enough, say "evidence insufficient".',
+            "Answer the original query using only these nodes.",
+            f'If the nodes are not enough, say "{insufficient_answer(original_query)}".',
             'Do not use the phrase "Short answer:".',
             "Every key conclusion must include one or more node_id citations.",
         ]
     )
 
 
-def print_context_debug(query: str, evidence: list[dict[str, Any]]) -> None:
-    print(build_context_debug_report(query, evidence, include_prompt=False))
+def print_context_debug(query: str, normalized_query: str, evidence: list[dict[str, Any]]) -> None:
+    print(build_context_debug_report(query, normalized_query, evidence, include_prompt=False))
 
 
-def save_context_debug(path: Path, query: str, evidence: list[dict[str, Any]]) -> None:
+def save_context_debug(path: Path, query: str, normalized_query: str, evidence: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(build_context_debug_report(query, evidence, include_prompt=True), encoding="utf-8")
+    path.write_text(build_context_debug_report(query, normalized_query, evidence, include_prompt=True), encoding="utf-8")
 
 
-def build_context_debug_report(query: str, evidence: list[dict[str, Any]], include_prompt: bool) -> str:
+def build_context_debug_report(
+    query: str,
+    normalized_query: str,
+    evidence: list[dict[str, Any]],
+    include_prompt: bool,
+) -> str:
     lines: list[str] = [
         "========================================",
         "Retrieved Context",
         "========================================",
+        "",
+        f"Original query: {query}",
+        f"Normalized retrieval query: {normalized_query}",
         "",
     ]
     for index, item in enumerate(evidence, start=1):
@@ -199,7 +351,7 @@ def build_context_debug_report(query: str, evidence: list[dict[str, Any]], inclu
         )
 
     total_context_chars = sum(len(item.get("quote", "")) for item in evidence)
-    prompt = build_user_prompt(query, evidence)
+    prompt = build_user_prompt(query, normalized_query, evidence)
     lines.extend(
         [
             "========================================",
@@ -214,8 +366,11 @@ def build_context_debug_report(query: str, evidence: list[dict[str, Any]], inclu
             "Sending To OpenAI",
             "========================================",
             "",
-            "Question:",
+            "Original query:",
             query,
+            "",
+            "Normalized retrieval query:",
+            normalized_query,
         ]
     )
     if include_prompt:
@@ -236,8 +391,10 @@ def approx_tokens(text: str) -> int:
     return max(1, round(len(text) / 4))
 
 
-def print_answer(answer: str, evidence: list[dict[str, Any]]) -> None:
-    print("Answer:")
+def print_answer(answer: str, evidence: list[dict[str, Any]], original_query: str, normalized_query: str) -> None:
+    print(f"Original query: {original_query}")
+    print(f"Normalized retrieval query: {normalized_query}")
+    print("\nAnswer:")
     print(answer)
     print("\nEvidence:")
     for index, item in enumerate(evidence, start=1):
@@ -279,6 +436,11 @@ def main() -> None:
     )
     parser.add_argument("--max-context-chars", type=int, default=MAX_CONTEXT_CHARS_PER_NODE)
     parser.add_argument(
+        "--no-query-normalization",
+        action="store_true",
+        help="Disable Chinese query normalization before retrieval.",
+    )
+    parser.add_argument(
         "--show-context",
         action="store_true",
         help="Print retrieved context and prompt size before calling OpenAI.",
@@ -290,7 +452,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    answer, evidence = answer_query(
+    result = run_rag_pipeline(
         query=args.query,
         nodes_path=args.nodes,
         storage_dir=args.storage_dir,
@@ -304,10 +466,17 @@ def main() -> None:
         bm25_only_penalty=args.bm25_only_penalty,
         embedding_only_penalty=args.embedding_only_penalty,
         max_context_chars=args.max_context_chars,
+        no_query_normalization=args.no_query_normalization,
         show_context=args.show_context,
         save_context=args.save_context,
+        debug_context_path=Path("data/debug_context.txt"),
     )
-    print_answer(answer, evidence)
+    print_answer(
+        result["answer"],
+        result["evidence"],
+        result["original_query"],
+        result["normalized_query"],
+    )
 
 
 if __name__ == "__main__":

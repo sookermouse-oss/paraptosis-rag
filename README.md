@@ -102,6 +102,12 @@ Run these from the project root:
 
 `rag-answer.sh`, `rag-context.sh`, and `rag-compare.sh` use the OpenAI API through `OPENAI_API_KEY`. `rag-context.sh` also writes the latest debug context to `data/debug_context.txt`.
 
+Run the Chinese RAG evaluation workflow:
+
+```bash
+./scripts/rag-eval-zh.sh
+```
+
 Each JSONL row contains at least:
 
 - `node_id`
