@@ -76,6 +76,32 @@ python src/hybrid_retrieval.py \
   --max-chunks-per-pmcid 2
 ```
 
+Run minimal RAG answering with hybrid retrieval plus the OpenAI Responses API. Set `OPENAI_API_KEY` in the environment; the key is not stored in the repo. Defaults use hybrid retrieval with BM25 weight `0.2`, embedding weight `0.8`, single-source penalties enabled, `--exclude-section-type methods`, and `--top-k 8`:
+
+```bash
+export OPENAI_API_KEY="..."
+
+python src/rag_answer.py \
+  --query "Can paraptosis help overcome drug resistance?"
+
+python src/rag_answer.py \
+  --query "What is the role of PI4KB in paraptosis?"
+```
+
+## Common commands
+
+Run these from the project root:
+
+```bash
+./scripts/rag-build-500.sh
+./scripts/rag-benchmark.sh
+./scripts/rag-context.sh "What is the role of PI4KB in paraptosis?"
+./scripts/rag-answer.sh "Can paraptosis help overcome drug resistance?"
+./scripts/rag-compare.sh
+```
+
+`rag-answer.sh`, `rag-context.sh`, and `rag-compare.sh` use the OpenAI API through `OPENAI_API_KEY`. `rag-context.sh` also writes the latest debug context to `data/debug_context.txt`.
+
 Each JSONL row contains at least:
 
 - `node_id`

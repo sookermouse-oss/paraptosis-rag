@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -152,14 +153,31 @@ def preview(text: str, max_chars: int = 300) -> str:
 
 def load_huggingface_embedding(model_name: str) -> Any:
     imports = llamaindex_imports()
+    original_hf_offline = os.environ.get("HF_HUB_OFFLINE")
+    original_transformers_offline = os.environ.get("TRANSFORMERS_OFFLINE")
+
+    os.environ["HF_HUB_OFFLINE"] = original_hf_offline or "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = original_transformers_offline or "1"
     try:
-        return imports["HuggingFaceEmbedding"](model_name=model_name)
-    except Exception as exc:
-        raise SystemExit(
-            f"Failed to load HuggingFace embedding model '{model_name}'. "
-            "Install dependencies and ensure the model can be downloaded or is cached locally. "
-            f"Original error: {exc}"
-        ) from exc
+        return imports["HuggingFaceEmbedding"](model_name=model_name, local_files_only=True)
+    except Exception as local_exc:
+        restore_env_var("HF_HUB_OFFLINE", original_hf_offline)
+        restore_env_var("TRANSFORMERS_OFFLINE", original_transformers_offline)
+        try:
+            return imports["HuggingFaceEmbedding"](model_name=model_name)
+        except Exception as exc:
+            raise SystemExit(
+                f"Failed to load HuggingFace embedding model '{model_name}'. "
+                "Tried local cache first, then online loading. "
+                f"Local cache error: {local_exc}. Online error: {exc}"
+            ) from exc
+
+
+def restore_env_var(name: str, value: str | None) -> None:
+    if value is None:
+        os.environ.pop(name, None)
+    else:
+        os.environ[name] = value
 
 
 def llamaindex_imports() -> dict[str, Any]:
