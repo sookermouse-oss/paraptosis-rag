@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,28 @@ DEFAULT_OPENAI_MODEL = "gpt-5-mini"
 DEFAULT_EXCLUDED_SECTION_TYPES = ["methods"]
 MAX_CONTEXT_CHARS_PER_NODE = 1600
 CHINESE_CHAR_RE = re.compile(r"[\u4e00-\u9fff]")
+QUERY_TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
+QUERY_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "between",
+    "can",
+    "does",
+    "how",
+    "in",
+    "is",
+    "of",
+    "or",
+    "relationship",
+    "role",
+    "the",
+    "to",
+    "what",
+    "with",
+}
+QUERY_ANCHOR_TERMS = {"paraptosis"}
 OPENAI_NETWORK_ERROR_HINT = (
     "OpenAI request failed before a response was returned. "
     "This is usually a network/proxy issue, an unavailable upstream service, or a timeout. "
@@ -202,6 +225,8 @@ def enrich_evidence(
                 "section_type": result.get("section_type"),
                 "content_type": result.get("content_type") or node.get("content_type", "fulltext"),
                 "pmcid": node.get("pmcid") or pmcid_from_node_id(result.get("node_id")),
+                "year": result.get("year") or node.get("year"),
+                "cited_by_count": result.get("cited_by_count") or node.get("cited_by_count"),
                 "score": result.get("hybrid_score", result.get("score")),
                 "bm25_score": result.get("bm25_score"),
                 "embedding_score": result.get("embedding_score"),
@@ -465,9 +490,95 @@ def approx_tokens(text: str) -> int:
     return max(1, round(len(text) / 4))
 
 
+def retrieval_quality(evidence: list[dict[str, Any]], query: str = "") -> dict[str, Any]:
+    scores = [score for score in (to_float(item.get("score")) for item in evidence) if score is not None]
+    top1_score = scores[0] if scores else 0.0
+    top5 = scores[:5]
+    top5_avg_score = sum(top5) / len(top5) if top5 else 0.0
+    unique_pmcids = {item.get("pmcid") for item in evidence if item.get("pmcid")}
+    top8_unique_pmcids = {item.get("pmcid") for item in evidence[:8] if item.get("pmcid")}
+    content_type_distribution = Counter(item.get("content_type") or "missing" for item in evidence)
+    section_type_distribution = Counter(item.get("section_type") or "missing" for item in evidence)
+    query_coverage = evidence_query_coverage(query, evidence)
+
+    if top1_score >= 0.85 and top5_avg_score >= 0.45:
+        label = "HIGH"
+    elif top1_score >= 0.6 and top5_avg_score >= 0.25:
+        label = "MEDIUM"
+    else:
+        label = "LOW"
+    if query_coverage < 0.6:
+        label = "LOW"
+
+    return {
+        "label": label,
+        "top1_score": top1_score,
+        "top5_avg_score": top5_avg_score,
+        "query_coverage": query_coverage,
+        "unique_pmcid_count": len(unique_pmcids),
+        "top8_unique_pmcid_count": len(top8_unique_pmcids),
+        "content_type_distribution": dict(content_type_distribution),
+        "section_type_distribution": dict(section_type_distribution),
+    }
+
+
+def to_float(value: Any) -> float | None:
+    try:
+        if value in ("", None):
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def evidence_query_coverage(query: str, evidence: list[dict[str, Any]]) -> float:
+    terms = important_query_terms(query)
+    if not terms:
+        return 1.0 if evidence else 0.0
+    haystack = " ".join(
+        str(part).casefold()
+        for item in evidence[:5]
+        for part in (
+            item.get("title", ""),
+            item.get("section_title", ""),
+            item.get("quote", ""),
+        )
+        if part
+    )
+    matched = sum(1 for term in terms if term in haystack)
+    return matched / len(terms)
+
+
+def important_query_terms(query: str) -> list[str]:
+    terms = []
+    for token in QUERY_TOKEN_RE.findall(query.casefold()):
+        if len(token) < 3:
+            continue
+        if token in QUERY_STOPWORDS or token in QUERY_ANCHOR_TERMS:
+            continue
+        if token not in terms:
+            terms.append(token)
+    return terms
+
+
+def print_retrieval_confidence(evidence: list[dict[str, Any]], normalized_query: str) -> None:
+    quality = retrieval_quality(evidence, normalized_query)
+    print(f"\nRetrieval confidence: {quality['label']}")
+    print(f"top1_score: {quality['top1_score']:.4f}")
+    print(f"top5_avg_score: {quality['top5_avg_score']:.4f}")
+    print(f"query_coverage: {quality['query_coverage']:.4f}")
+    print(f"unique_pmcid_count: {quality['unique_pmcid_count']}")
+    print(f"top8_unique_pmcid_count: {quality['top8_unique_pmcid_count']}")
+    print(f"content_type distribution: {quality['content_type_distribution']}")
+    print(f"section_type distribution: {quality['section_type_distribution']}")
+    if quality["label"] == "LOW":
+        print("Warning: retrieval confidence is low. The RAG answer may be less reliable.")
+
+
 def print_answer(answer: str, evidence: list[dict[str, Any]], original_query: str, normalized_query: str) -> None:
     print(f"Original query: {original_query}")
     print(f"Normalized retrieval query: {normalized_query}")
+    print_retrieval_confidence(evidence, normalized_query)
     print("\nAnswer:")
     print(answer)
     print("\nEvidence:")
@@ -475,6 +586,8 @@ def print_answer(answer: str, evidence: list[dict[str, Any]], original_query: st
         print(f"{index}. {item.get('node_id')}")
         print(f"   title: {item.get('title')}")
         print(f"   content_type: {item.get('content_type')}")
+        print(f"   year: {item.get('year')}")
+        print(f"   cited_by_count: {item.get('cited_by_count')}")
         print(f"   section_title: {item.get('section_title')}")
         print(f"   score: {item.get('score')}")
         print(f"   preview: {preview(item.get('quote', ''))}")

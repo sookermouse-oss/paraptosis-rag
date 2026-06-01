@@ -171,6 +171,16 @@ python src/rag_answer.py \
   --query "What is the role of PI4KB in paraptosis?"
 ```
 
+Before printing the answer, `rag_answer.py` reports retrieval confidence for the returned evidence:
+
+- `HIGH`: `top1_score >= 0.85` and `top5_avg_score >= 0.45`
+- `MEDIUM`: `top1_score >= 0.6` and `top5_avg_score >= 0.25`
+- `LOW`: anything below those thresholds
+
+The confidence block also prints unique PMCID counts plus `content_type` and `section_type` distributions. A `LOW` score prints a warning, but it does not switch to GPT-only mode, block answering, or change the retrieval ranking/prompt.
+
+For off-topic questions, the confidence check also reports `query_coverage`, a lightweight diagnostic that checks whether important non-anchor query terms appear in the retrieved evidence. Low query coverage downgrades confidence to `LOW`, even if the retriever finds generally strong paraptosis-related chunks.
+
 ## Common commands
 
 Run these from the project root:
