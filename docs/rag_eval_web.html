@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chinese GPT-only vs RAG Benchmark Runner</title>
+  <style>
+    :root {
+      --ink: #172033;
+      --muted: #667085;
+      --line: #d5dce8;
+      --bg: #eef2f7;
+      --panel: #ffffff;
+      --blue: #3567d6;
+      --green: #2f9e73;
+      --red: #bf4e5b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 20px 48px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 34px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+    .subtitle {
+      margin: 0 0 24px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.45;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      box-shadow: 0 12px 34px rgba(24, 33, 47, 0.08);
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #344054;
+      font-weight: 650;
+    }
+    textarea {
+      width: 100%;
+      min-height: 132px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      color: var(--ink);
+      font: inherit;
+      line-height: 1.45;
+    }
+    textarea:focus {
+      outline: 2px solid rgba(53, 103, 214, 0.2);
+      border-color: var(--blue);
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+      align-items: center;
+    }
+    button {
+      border: 0;
+      border-radius: 7px;
+      padding: 10px 14px;
+      background: var(--blue);
+      color: #fff;
+      font-weight: 700;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.62;
+    }
+    .secondary {
+      background: #eef2f7;
+      color: #334155;
+      border: 1px solid var(--line);
+    }
+    .hint {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .status {
+      margin-top: 14px;
+      padding: 10px 12px;
+      border-radius: 7px;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      color: #344054;
+      font-size: 14px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+    }
+    .status.error {
+      background: #fff1f3;
+      border-color: #f0b4bd;
+      color: #8a2633;
+    }
+    .status.ok {
+      background: #edf8f2;
+      border-color: #9ed8b6;
+      color: #226348;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 11px;
+      background: #fbfcfe;
+    }
+    .metric strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 18px;
+    }
+    .metric span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    pre {
+      margin: 0;
+      min-height: 460px;
+      max-height: 70vh;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: #0f172a;
+      color: #e5edf7;
+      font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: 1fr; }
+      .summary { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Chinese GPT-only vs RAG Benchmark Runner</h1>
+  <p class="subtitle">输入一个中文问题，网页会请求本地 Python server，server 调用 <code>src/benchmark_zh_rag_vs_gpt.py</code>，然后并排显示 GPT-only answer 和 RAG answer。</p>
+
+  <div class="layout">
+    <section class="panel">
+      <label for="question">问题</label>
+      <textarea id="question">PI4KB 在副凋亡中的作用是什么？</textarea>
+      <div class="row">
+        <button id="run">Run benchmark</button>
+        <button id="copy" class="secondary" disabled>Copy report</button>
+      </div>
+      <div id="status" class="status">Ready. This can take 30-90 seconds because it calls retrieval and OpenAI.</div>
+      <p class="hint">必须通过本地 server 打开：运行 <code>./scripts/rag-eval-web.sh</code>，然后访问 <code>http://127.0.0.1:8765</code>。不要直接双击 HTML 文件。</p>
+      <p class="hint">本页面只适合本地使用。不要暴露到公网，因为后端会执行本仓库里的 benchmark 程序并调用 OpenAI API。</p>
+    </section>
+
+    <section class="panel">
+      <div class="summary">
+        <div class="metric"><strong id="retrievalStrength">-</strong><span>retrieval strength</span></div>
+        <div class="metric"><strong id="evidenceDiversity">-</strong><span>evidence diversity</span></div>
+        <div class="metric"><strong id="top1">-</strong><span>top1 score</span></div>
+        <div class="metric"><strong id="top5">-</strong><span>top5 avg</span></div>
+        <div class="metric"><strong id="coverage">-</strong><span>coverage</span></div>
+        <div class="metric"><strong id="evidence">-</strong><span>evidence count</span></div>
+      </div>
+      <pre id="report">Benchmark report will appear here.</pre>
+    </section>
+  </div>
+</main>
+
+<script>
+const questionEl = document.getElementById('question');
+const runEl = document.getElementById('run');
+const copyEl = document.getElementById('copy');
+const statusEl = document.getElementById('status');
+const reportEl = document.getElementById('report');
+const retrievalStrengthEl = document.getElementById('retrievalStrength');
+const evidenceDiversityEl = document.getElementById('evidenceDiversity');
+const top1El = document.getElementById('top1');
+const top5El = document.getElementById('top5');
+const coverageEl = document.getElementById('coverage');
+const evidenceEl = document.getElementById('evidence');
+
+if (window.location.protocol === 'file:') {
+  runEl.disabled = true;
+  setStatus(
+    'This page was opened as a local file, so it cannot call /api/run. Start the local server with ./scripts/rag-eval-web.sh, then open http://127.0.0.1:8765.',
+    'error'
+  );
+}
+
+function setStatus(text, kind = '') {
+  statusEl.textContent = text;
+  statusEl.className = `status ${kind}`.trim();
+}
+
+function resetMetrics() {
+  retrievalStrengthEl.textContent = '-';
+  evidenceDiversityEl.textContent = '-';
+  top1El.textContent = '-';
+  top5El.textContent = '-';
+  coverageEl.textContent = '-';
+  evidenceEl.textContent = '-';
+}
+
+function updateMetrics(metrics) {
+  retrievalStrengthEl.textContent = metrics.retrieval_strength || '-';
+  evidenceDiversityEl.textContent = metrics.evidence_diversity || '-';
+  top1El.textContent = metrics.top1 || '-';
+  top5El.textContent = metrics.top5 || '-';
+  coverageEl.textContent = metrics.coverage || '-';
+  evidenceEl.textContent = metrics.evidence_count || '-';
+}
+
+runEl.addEventListener('click', async () => {
+  if (window.location.protocol === 'file:') {
+    setStatus(
+      'This page must be opened from http://127.0.0.1:8765, not file://.',
+      'error'
+    );
+    return;
+  }
+
+  const question = questionEl.value.trim();
+  if (!question) {
+    setStatus('Please enter a question.', 'error');
+    return;
+  }
+
+  runEl.disabled = true;
+  copyEl.disabled = true;
+  resetMetrics();
+  reportEl.textContent = 'Running benchmark...';
+  setStatus('Running GPT-only vs RAG benchmark. Please wait.');
+
+  try {
+    const response = await fetch('/api/run', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({question})
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || `HTTP ${response.status}`);
+    }
+    reportEl.textContent = data.report;
+    updateMetrics(data.metrics || {});
+    copyEl.disabled = false;
+    setStatus(`Done. Report path: ${data.output_path}`, 'ok');
+  } catch (error) {
+    reportEl.textContent = '';
+    setStatus(String(error.message || error), 'error');
+  } finally {
+    runEl.disabled = false;
+  }
+});
+
+copyEl.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(reportEl.textContent);
+  setStatus('Copied report to clipboard.', 'ok');
+});
+</script>
+</body>
+</html>

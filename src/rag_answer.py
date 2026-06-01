@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 from collections import Counter
@@ -24,6 +25,7 @@ from search_nodes import filter_nodes, load_nodes
 DEFAULT_TOP_K = 8
 DEFAULT_OPENAI_MODEL = "gpt-5-mini"
 DEFAULT_EXCLUDED_SECTION_TYPES = ["methods"]
+DEFAULT_TERMINOLOGY_PATH = Path("config/terminology_zh_en.json")
 MAX_CONTEXT_CHARS_PER_NODE = 1600
 CHINESE_CHAR_RE = re.compile(r"[\u4e00-\u9fff]")
 QUERY_TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
@@ -254,6 +256,7 @@ def normalize_retrieval_query(
 ) -> str:
     if no_query_normalization or not contains_chinese(original_query):
         return original_query
+    protected_terms = protected_terminology_for_query(original_query)
 
     try:
         from openai import OpenAI
@@ -271,7 +274,61 @@ def normalize_retrieval_query(
     normalized = cleanup_normalized_query(response.output_text)
     if not normalized:
         raise SystemExit("Failed to normalize the Chinese query into an English retrieval query.")
-    return normalized
+    return ensure_protected_terminology(normalized, protected_terms)
+
+
+def load_project_terminology(path: Path = DEFAULT_TERMINOLOGY_PATH) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError(f"Terminology map must be a JSON object: {path}")
+    terminology: dict[str, str] = {}
+    for zh_term, en_term in data.items():
+        if not isinstance(zh_term, str) or not isinstance(en_term, str):
+            raise ValueError(f"Terminology keys and values must be strings: {path}")
+        zh_term = zh_term.strip()
+        en_term = en_term.strip()
+        if zh_term and en_term:
+            terminology[zh_term] = en_term
+    return terminology
+
+
+def protected_terminology_for_query(query: str) -> list[str]:
+    terminology = load_project_terminology()
+    occupied = [False] * len(query)
+    protected_terms: list[str] = []
+    for zh_term, en_term in sorted(terminology.items(), key=lambda item: len(item[0]), reverse=True):
+        start = 0
+        while True:
+            index = query.find(zh_term, start)
+            if index < 0:
+                break
+            end = index + len(zh_term)
+            if not any(occupied[index:end]):
+                protected_terms.append(en_term)
+                for position in range(index, end):
+                    occupied[position] = True
+                break
+            start = end
+    return protected_terms
+
+
+def ensure_protected_terminology(normalized_query: str, protected_terms: list[str]) -> str:
+    missing_terms = [
+        term
+        for term in protected_terms
+        if not english_term_present(normalized_query, term)
+    ]
+    if not missing_terms:
+        return normalized_query
+    return f"{normalized_query} {' '.join(missing_terms)}"
+
+
+def english_term_present(text: str, term: str) -> bool:
+    pattern = rf"(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])"
+    return re.search(pattern, text, flags=re.IGNORECASE) is not None
 
 
 def cleanup_normalized_query(text: str) -> str:
@@ -500,6 +557,7 @@ def retrieval_quality(evidence: list[dict[str, Any]], query: str = "") -> dict[s
     content_type_distribution = Counter(item.get("content_type") or "missing" for item in evidence)
     section_type_distribution = Counter(item.get("section_type") or "missing" for item in evidence)
     query_coverage = evidence_query_coverage(query, evidence)
+    diversity_label = evidence_diversity_label(len(top8_unique_pmcids))
 
     if top1_score >= 0.85 and top5_avg_score >= 0.45:
         label = "HIGH"
@@ -507,11 +565,11 @@ def retrieval_quality(evidence: list[dict[str, Any]], query: str = "") -> dict[s
         label = "MEDIUM"
     else:
         label = "LOW"
-    if query_coverage < 0.6:
-        label = "LOW"
 
     return {
         "label": label,
+        "retrieval_strength": label,
+        "evidence_diversity": diversity_label,
         "top1_score": top1_score,
         "top5_avg_score": top5_avg_score,
         "query_coverage": query_coverage,
@@ -520,6 +578,14 @@ def retrieval_quality(evidence: list[dict[str, Any]], query: str = "") -> dict[s
         "content_type_distribution": dict(content_type_distribution),
         "section_type_distribution": dict(section_type_distribution),
     }
+
+
+def evidence_diversity_label(top8_unique_pmcid_count: int) -> str:
+    if top8_unique_pmcid_count >= 5:
+        return "HIGH"
+    if top8_unique_pmcid_count >= 3:
+        return "MEDIUM"
+    return "LOW"
 
 
 def to_float(value: Any) -> float | None:
@@ -563,16 +629,17 @@ def important_query_terms(query: str) -> list[str]:
 
 def print_retrieval_confidence(evidence: list[dict[str, Any]], normalized_query: str) -> None:
     quality = retrieval_quality(evidence, normalized_query)
-    print(f"\nRetrieval confidence: {quality['label']}")
+    print(f"\nRetrieval strength: {quality['retrieval_strength']}")
     print(f"top1_score: {quality['top1_score']:.4f}")
     print(f"top5_avg_score: {quality['top5_avg_score']:.4f}")
-    print(f"query_coverage: {quality['query_coverage']:.4f}")
+    print(f"Evidence diversity: {quality['evidence_diversity']}")
     print(f"unique_pmcid_count: {quality['unique_pmcid_count']}")
     print(f"top8_unique_pmcid_count: {quality['top8_unique_pmcid_count']}")
+    print(f"query_coverage: {quality['query_coverage']:.4f}")
     print(f"content_type distribution: {quality['content_type_distribution']}")
     print(f"section_type distribution: {quality['section_type_distribution']}")
-    if quality["label"] == "LOW":
-        print("Warning: retrieval confidence is low. The RAG answer may be less reliable.")
+    if quality["retrieval_strength"] == "LOW":
+        print("Warning: retrieval strength is low. The RAG answer may be less reliable.")
 
 
 def print_answer(answer: str, evidence: list[dict[str, Any]], original_query: str, normalized_query: str) -> None:

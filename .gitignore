@@ -6,6 +6,8 @@ data/llamaindex_storage/
 data/literature/
 data/debug_context.txt
 data/eval_zh_answers.md
+data/eval_zh_gpt_vs_rag*.md
+data/eval_zh_web*.md
 fulltext_xml/
 .venv/
 __pycache__/

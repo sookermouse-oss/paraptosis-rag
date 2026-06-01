@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Molecular Cell Biology RAG Workflow</title>
+  <style>
+    :root {
+      --ink: #172033;
+      --muted: #667085;
+      --line: #d5dce8;
+      --soft: #f7f9fc;
+      --green: #2f9e73;
+      --blue: #3567d6;
+      --orange: #c87225;
+      --red: #bf4e5b;
+      --violet: #725ac1;
+      --teal: #16858c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #e8edf4;
+      color: var(--ink);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { display: grid; gap: 28px; padding: 28px; }
+    .slide {
+      width: 1280px;
+      min-height: 720px;
+      margin: 0 auto;
+      padding: 44px 56px;
+      background: #fff;
+      border: 1px solid var(--line);
+      box-shadow: 0 18px 50px rgba(24, 33, 47, 0.14);
+      page-break-after: always;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      gap: 28px;
+      margin-bottom: 22px;
+    }
+    h1 {
+      margin: 0 0 9px;
+      font-size: 38px;
+      line-height: 1.12;
+      letter-spacing: 0;
+    }
+    .subtitle {
+      margin: 0;
+      max-width: 860px;
+      color: var(--muted);
+      font-size: 19px;
+      line-height: 1.42;
+    }
+    .tag {
+      height: fit-content;
+      padding: 9px 13px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--soft);
+      color: #344054;
+      font-size: 15px;
+      white-space: nowrap;
+    }
+    .content {
+      display: grid;
+      grid-template-columns: 1.08fr 0.92fr;
+      gap: 28px;
+      align-items: start;
+    }
+    .content-even {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+      padding: 18px;
+    }
+    .panel h2 {
+      margin: 0 0 12px;
+      font-size: 21px;
+      letter-spacing: 0;
+    }
+    .points {
+      margin: 0;
+      padding-left: 21px;
+      color: #344054;
+      font-size: 18px;
+      line-height: 1.47;
+    }
+    .points li { margin: 8px 0; }
+    .callout {
+      margin-top: 14px;
+      padding: 14px 16px;
+      border-left: 5px solid var(--blue);
+      background: #f1f6ff;
+      color: #24364f;
+      font-size: 18px;
+      line-height: 1.42;
+    }
+    .mini-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .mini {
+      min-height: 80px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 12px;
+    }
+    .mini strong {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 18px;
+    }
+    .mini span {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.34;
+    }
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 16px;
+      line-height: 1.35;
+      overflow: hidden;
+      border-radius: 8px;
+    }
+    .table th, .table td {
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+    .table th { background: #f2f5f9; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.9em;
+      background: #eef2f7;
+      padding: 2px 5px;
+      border-radius: 5px;
+    }
+    svg { display: block; width: 100%; height: auto; }
+    .node text {
+      font-size: 16px;
+      font-weight: 700;
+      fill: #172033;
+    }
+    .node .small {
+      font-size: 12px;
+      font-weight: 500;
+      fill: #506176;
+    }
+    .arrow {
+      stroke: #6b7a90;
+      stroke-width: 2.25;
+      fill: none;
+      marker-end: url(#arrow);
+    }
+    .caption {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.38;
+      margin-top: 12px;
+    }
+    @media print {
+      body { background: #fff; }
+      main { padding: 0; gap: 0; }
+      .slide { width: 100vw; height: 100vh; border: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <section class="slide">
+    <div class="header">
+      <div>
+        <h1>Molecular Cell Biology RAG：带证据的论文问答系统</h1>
+        <p class="subtitle">目标不是让 GPT “凭记忆回答”，而是让它先从本地论文资料库里找证据，再基于证据组织中文答案；副凋亡只是当前验证用的第一个主题。</p>
+      </div>
+      <div class="tag">1 / 6 总览</div>
+    </div>
+
+    <div class="content">
+      <div class="panel">
+        <svg viewBox="0 0 720 455" role="img" aria-label="RAG overview workflow">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#6b7a90"></path>
+            </marker>
+          </defs>
+          <g class="node">
+            <rect x="38" y="84" width="170" height="82" rx="9" fill="#eaf4ef" stroke="#7cc6a4"></rect>
+            <text x="123" y="117" text-anchor="middle">论文资料</text>
+            <text class="small" x="123" y="142" text-anchor="middle">摘要 + 全文 XML</text>
+
+            <rect x="276" y="84" width="170" height="82" rx="9" fill="#edf2ff" stroke="#9ab2f1"></rect>
+            <text x="361" y="117" text-anchor="middle">本地资料库</text>
+            <text class="small" x="361" y="142" text-anchor="middle">切成可引用片段</text>
+
+            <rect x="514" y="84" width="170" height="82" rx="9" fill="#fff7ed" stroke="#f1b271"></rect>
+            <text x="599" y="117" text-anchor="middle">用户问题</text>
+            <text class="small" x="599" y="142" text-anchor="middle">中文或英文</text>
+
+            <rect x="276" y="238" width="170" height="82" rx="9" fill="#f2efff" stroke="#b6a6ea"></rect>
+            <text x="361" y="271" text-anchor="middle">检索证据</text>
+            <text class="small" x="361" y="296" text-anchor="middle">关键词 + 语义</text>
+
+            <rect x="514" y="238" width="170" height="82" rx="9" fill="#eaf7ff" stroke="#85c5ef"></rect>
+            <text x="599" y="271" text-anchor="middle">生成答案</text>
+            <text class="small" x="599" y="296" text-anchor="middle">结论后带出处</text>
+
+            <rect x="38" y="238" width="170" height="82" rx="9" fill="#fff1f3" stroke="#e89aa5"></rect>
+            <text x="123" y="271" text-anchor="middle">可信度提示</text>
+            <text class="small" x="123" y="296" text-anchor="middle">HIGH / MEDIUM / LOW</text>
+          </g>
+          <path class="arrow" d="M208 125 L276 125"></path>
+          <path class="arrow" d="M514 125 C470 126 450 198 414 238"></path>
+          <path class="arrow" d="M361 166 L361 238"></path>
+          <path class="arrow" d="M446 279 L514 279"></path>
+          <path class="arrow" d="M276 279 L208 279"></path>
+        </svg>
+      </div>
+
+      <div>
+        <div class="panel">
+          <h2>一句话解释 RAG</h2>
+          <ul class="points">
+            <li><strong>R</strong>etrieval：先找资料。</li>
+            <li><strong>A</strong>ugmented：把找到的资料交给 GPT。</li>
+            <li><strong>G</strong>eneration：GPT 只根据这些资料回答。</li>
+          </ul>
+        </div>
+        <div class="callout">
+          对听众可以这样说：这不是“让 AI 自己想答案”，而是“让 AI 带着论文证据回答”。
+        </div>
+        <div class="mini-grid">
+          <div class="mini"><strong>输入</strong><span>用户问题，例如“副凋亡能克服耐药吗？”</span></div>
+          <div class="mini"><strong>中间过程</strong><span>从本地论文库中找最相关证据。</span></div>
+          <div class="mini"><strong>输出</strong><span>中文答案 + 引用到具体 node_id。</span></div>
+          <div class="mini"><strong>保护机制</strong><span>证据不足时提示风险或说证据不足。</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="header">
+      <div>
+        <h1>第一步：把论文变成可检索的资料库</h1>
+        <p class="subtitle">系统先从公开数据库收集论文身份信息、摘要和全文 XML，然后把长论文切成小段，并把每段文字转换成向量，方便后续语义检索。</p>
+      </div>
+      <div class="tag">2 / 6 数据准备</div>
+    </div>
+
+    <div class="content">
+      <div class="panel">
+        <svg viewBox="0 0 720 455" role="img" aria-label="Data ingestion workflow">
+          <g class="node">
+            <rect x="30" y="52" width="180" height="74" rx="9" fill="#eaf4ef" stroke="#7cc6a4"></rect>
+            <text x="120" y="82" text-anchor="middle">发现论文</text>
+            <text class="small" x="120" y="105" text-anchor="middle">Europe PMC</text>
+
+            <rect x="30" y="164" width="180" height="74" rx="9" fill="#edf2ff" stroke="#9ab2f1"></rect>
+            <text x="120" y="194" text-anchor="middle">补充元数据</text>
+            <text class="small" x="120" y="217" text-anchor="middle">PubMed / OpenAlex</text>
+
+            <rect x="30" y="276" width="180" height="74" rx="9" fill="#fff7ed" stroke="#f1b271"></rect>
+            <text x="120" y="306" text-anchor="middle">下载全文</text>
+            <text class="small" x="120" y="329" text-anchor="middle">PMC XML</text>
+
+            <rect x="282" y="92" width="180" height="120" rx="9" fill="#f2efff" stroke="#b6a6ea"></rect>
+            <text x="372" y="126" text-anchor="middle">三张资料表</text>
+            <text class="small" x="372" y="152" text-anchor="middle">papers</text>
+            <text class="small" x="372" y="174" text-anchor="middle">source_records</text>
+            <text class="small" x="372" y="196" text-anchor="middle">content_assets</text>
+
+            <rect x="282" y="272" width="180" height="86" rx="9" fill="#fff1f3" stroke="#e89aa5"></rect>
+            <text x="372" y="306" text-anchor="middle">解析与切段</text>
+            <text class="small" x="372" y="332" text-anchor="middle">摘要 / 正文分开</text>
+
+            <rect x="526" y="120" width="168" height="82" rx="9" fill="#eaf7ff" stroke="#85c5ef"></rect>
+            <text x="610" y="152" text-anchor="middle">nodes.jsonl</text>
+            <text class="small" x="610" y="176" text-anchor="middle">chunk text + 来源</text>
+
+            <rect x="526" y="278" width="168" height="92" rx="9" fill="#eaf4ef" stroke="#7cc6a4"></rect>
+            <text x="610" y="310" text-anchor="middle">Embedding index</text>
+            <text class="small" x="610" y="335" text-anchor="middle">chunk text → vector</text>
+            <text class="small" x="610" y="356" text-anchor="middle">用于语义检索</text>
+          </g>
+          <path class="arrow" d="M210 89 C246 92 246 122 282 138"></path>
+          <path class="arrow" d="M210 201 C246 200 248 172 282 164"></path>
+          <path class="arrow" d="M210 313 L282 313"></path>
+          <path class="arrow" d="M372 212 L372 272"></path>
+          <path class="arrow" d="M462 315 C500 314 493 188 526 170"></path>
+          <path class="arrow" d="M462 152 L526 160"></path>
+          <path class="arrow" d="M610 202 L610 278"></path>
+        </svg>
+        <p class="caption">这里最重要的是两件事：一是“身份”和“内容”分开；二是每个 chunk text 会被 embedding model 转换成 vector，之后才能做语义检索。</p>
+      </div>
+
+      <div>
+        <div class="panel">
+          <h2>为什么要这样设计？</h2>
+          <ul class="points">
+            <li>同一篇论文可能同时有 DOI、PMID、PMCID，需要去重合并。</li>
+            <li>摘要很有价值，但不能混进正文段落里。</li>
+            <li>全文里有 methods、results、discussion 等章节，回答时可以过滤 methods。</li>
+            <li>每个 node 都保留 <code>content_type</code> 和 <code>section_type</code>，方便审计。</li>
+            <li>每个 chunk 还会被 embedding model 转成 vector，存入本地 LlamaIndex。</li>
+          </ul>
+        </div>
+        <div class="panel" style="margin-top: 14px;">
+          <h2>当前保留的内容类型</h2>
+          <table class="table">
+            <tr><th>类型</th><th>用途</th></tr>
+            <tr><td><code>abstract</code></td><td>短、信息密度高，适合快速回答概览问题。</td></tr>
+            <tr><td><code>fulltext</code></td><td>更详细，适合机制、通路、证据链问题。</td></tr>
+            <tr><td><code>vector</code></td><td>不是给人读的文本，而是模型用来比较“语义距离”的数字表示。</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="header">
+      <div>
+        <h1>第二步：用户提问时，系统如何找证据？</h1>
+        <p class="subtitle">中文问题会先改写成英文检索问题，因为论文主体是英文；语义检索时，query 也会被转换成 vector，再和资料库里的 chunk vectors 做相似度比较。</p>
+      </div>
+      <div class="tag">3 / 6 Hybrid Retrieval</div>
+    </div>
+
+    <div class="content">
+      <div class="panel">
+        <svg viewBox="0 0 720 455" role="img" aria-label="Hybrid retrieval workflow">
+          <g class="node">
+            <rect x="34" y="54" width="176" height="80" rx="9" fill="#fff7ed" stroke="#f1b271"></rect>
+            <text x="122" y="88" text-anchor="middle">中文问题</text>
+            <text class="small" x="122" y="113" text-anchor="middle">保留原问题</text>
+
+            <rect x="272" y="54" width="176" height="80" rx="9" fill="#f2efff" stroke="#b6a6ea"></rect>
+            <text x="360" y="88" text-anchor="middle">英文检索问题</text>
+            <text class="small" x="360" y="113" text-anchor="middle">biomedical query</text>
+
+            <rect x="512" y="28" width="174" height="70" rx="9" fill="#edf2ff" stroke="#9ab2f1"></rect>
+            <text x="599" y="57" text-anchor="middle">关键词检索</text>
+            <text class="small" x="599" y="80" text-anchor="middle">BM25 Top 30</text>
+
+            <rect x="512" y="132" width="174" height="70" rx="9" fill="#eaf7ff" stroke="#85c5ef"></rect>
+            <text x="599" y="161" text-anchor="middle">语义检索</text>
+            <text class="small" x="599" y="184" text-anchor="middle">query vector vs chunk vectors</text>
+
+            <rect x="272" y="248" width="176" height="96" rx="9" fill="#eaf4ef" stroke="#7cc6a4"></rect>
+            <text x="360" y="282" text-anchor="middle">合并排序</text>
+            <text class="small" x="360" y="307" text-anchor="middle">0.2 关键词 + 0.8 语义</text>
+            <text class="small" x="360" y="328" text-anchor="middle">惩罚单侧命中</text>
+
+            <rect x="34" y="256" width="176" height="80" rx="9" fill="#fff1f3" stroke="#e89aa5"></rect>
+            <text x="122" y="290" text-anchor="middle">最终证据</text>
+            <text class="small" x="122" y="315" text-anchor="middle">Top 8 给 GPT</text>
+          </g>
+          <path class="arrow" d="M210 94 L272 94"></path>
+          <path class="arrow" d="M448 83 C480 70 484 64 512 63"></path>
+          <path class="arrow" d="M448 107 C480 132 484 166 512 167"></path>
+          <path class="arrow" d="M599 98 C600 232 446 232 416 248"></path>
+          <path class="arrow" d="M599 202 C598 260 448 260 416 286"></path>
+          <path class="arrow" d="M272 296 L210 296"></path>
+        </svg>
+        <p class="caption">关键词检索像“查目录”；语义检索先把文字变成 vector，再找向量空间里距离近的片段，也就是“意思相近”的段落。</p>
+      </div>
+
+      <div>
+        <div class="panel">
+          <h2>为什么要 Hybrid？</h2>
+          <ul class="points">
+            <li>只用关键词：容易抓到字面匹配但语义弱的结果。</li>
+            <li>只用语义：vector 能抓意思接近的段落，但可能漏掉基因名、药名这类精确实体。</li>
+            <li>Hybrid 同时利用两者：先广泛召回，再综合排序。</li>
+            <li>默认更信任语义分数：embedding 权重 0.8，BM25 权重 0.2。</li>
+          </ul>
+        </div>
+        <div class="panel" style="margin-top: 14px;">
+          <h2>默认保护</h2>
+          <table class="table">
+            <tr><th>情况</th><th>处理</th></tr>
+            <tr><td>只被关键词找到</td><td>分数乘以 0.4，避免字面噪声冲太高。</td></tr>
+            <tr><td>只被语义找到</td><td>分数乘以 0.8，保留但略降权。</td></tr>
+            <tr><td>两边都找到</td><td>不惩罚，说明结果更稳定。</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="header">
+      <div>
+        <h1>我们用什么 embedding model？</h1>
+        <p class="subtitle">当前使用 HuggingFace 上的生物医学 embedding model：<code>pritamdeka/S-PubMedBert-MS-MARCO</code>。它把 query 和论文 chunk 都转换成向量，用于比较语义相似度。</p>
+      </div>
+      <div class="tag">4 / 6 Embedding Model</div>
+    </div>
+
+    <div class="content">
+      <div class="panel">
+        <svg viewBox="0 0 720 455" role="img" aria-label="Embedding model workflow">
+          <g class="node">
+            <rect x="42" y="60" width="180" height="78" rx="9" fill="#fff7ed" stroke="#f1b271"></rect>
+            <text x="132" y="92" text-anchor="middle">论文 chunk</text>
+            <text class="small" x="132" y="116" text-anchor="middle">一段机制或结果文本</text>
+
+            <rect x="42" y="236" width="180" height="78" rx="9" fill="#f2efff" stroke="#b6a6ea"></rect>
+            <text x="132" y="268" text-anchor="middle">用户 query</text>
+            <text class="small" x="132" y="292" text-anchor="middle">英文检索问题</text>
+
+            <rect x="282" y="132" width="190" height="110" rx="9" fill="#edf2ff" stroke="#9ab2f1"></rect>
+            <text x="377" y="166" text-anchor="middle">PubMedBERT</text>
+            <text class="small" x="377" y="191" text-anchor="middle">biomedical embedding</text>
+            <text class="small" x="377" y="213" text-anchor="middle">text → vector</text>
+
+            <rect x="532" y="60" width="154" height="78" rx="9" fill="#eaf7ff" stroke="#85c5ef"></rect>
+            <text x="609" y="92" text-anchor="middle">chunk vector</text>
+            <text class="small" x="609" y="116" text-anchor="middle">存入本地索引</text>
+
+            <rect x="532" y="236" width="154" height="78" rx="9" fill="#eaf4ef" stroke="#7cc6a4"></rect>
+            <text x="609" y="268" text-anchor="middle">query vector</text>
+            <text class="small" x="609" y="292" text-anchor="middle">和 chunk 比距离</text>
+
+            <rect x="216" y="354" width="288" height="68" rx="9" fill="#fff1f3" stroke="#e89aa5"></rect>
+            <text x="360" y="383" text-anchor="middle">语义相似度排序</text>
+            <text class="small" x="360" y="405" text-anchor="middle">距离越近，越可能和问题相关</text>
+          </g>
+          <path class="arrow" d="M222 99 C252 104 252 148 282 164"></path>
+          <path class="arrow" d="M222 275 C254 270 252 224 282 210"></path>
+          <path class="arrow" d="M472 164 C500 145 504 102 532 99"></path>
+          <path class="arrow" d="M472 210 C500 224 504 272 532 275"></path>
+          <path class="arrow" d="M609 314 C596 354 500 354 468 354"></path>
+          <path class="arrow" d="M609 138 C594 338 504 340 468 354"></path>
+        </svg>
+        <p class="caption">向量可以理解成“文本在语义地图上的坐标”。医学含义接近的文本，坐标距离通常更近。</p>
+      </div>
+
+      <div>
+        <div class="panel">
+          <h2>为什么不用通用 embedding？</h2>
+          <ul class="points">
+            <li>分子细胞生物学里有大量专业词：基因、蛋白、通路、药物、细胞死亡类型。</li>
+            <li>通用模型可能知道词面，但不一定能稳定表示生物医学语义。</li>
+            <li>PubMedBERT 系列是在生物医学文献语料上训练，更适合论文检索。</li>
+            <li><code>S-PubMedBert-MS-MARCO</code> 适合把 query 和文档片段映射到同一个向量空间。</li>
+          </ul>
+        </div>
+        <div class="panel" style="margin-top: 14px;">
+          <h2>我们怎么用它？</h2>
+          <table class="table">
+            <tr><th>阶段</th><th>用途</th></tr>
+            <tr><td>build index</td><td>把每个 chunk text 转成 vector，存到本地 LlamaIndex。</td></tr>
+            <tr><td>retrieve</td><td>把 query 转成 vector，找最相似的 chunk vectors。</td></tr>
+            <tr><td>offline</td><td>默认优先用本地缓存，避免每次访问 HuggingFace Hub。</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="header">
+      <div>
+        <h1>第三步：GPT 如何生成答案？</h1>
+        <p class="subtitle">GPT 看到的是原始问题、英文检索问题、以及 Top 8 证据片段；系统要求它只基于这些证据回答。</p>
+      </div>
+      <div class="tag">5 / 6 Answering</div>
+    </div>
+
+    <div class="content-even">
+      <div class="panel">
+        <h2>输入给 GPT 的内容</h2>
+        <table class="table">
+          <tr><th>字段</th><th>作用</th></tr>
+          <tr><td>Original query</td><td>用户原始问题，中文问题最终也用中文回答。</td></tr>
+          <tr><td>Normalized query</td><td>英文检索问题，用来说明检索意图。</td></tr>
+          <tr><td>Evidence nodes</td><td>每条证据包含 node_id、标题、章节、正文片段。</td></tr>
+          <tr><td>System rules</td><td>只基于证据回答；证据不足就说不足；关键结论必须标注 node_id。</td></tr>
+        </table>
+        <div class="callout">
+          这样做的目的：减少幻觉，让答案能被人工追溯到具体论文片段。
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>输出长什么样？</h2>
+        <ul class="points">
+          <li><strong>Answer</strong>：中文机制性回答。</li>
+          <li><strong>Evidence</strong>：列出 node_id、标题、章节、分数和预览。</li>
+          <li><strong>content_type</strong>：说明证据来自 abstract 还是 fulltext。</li>
+          <li><strong>year / cited_by_count</strong>：如果 metadata 里有，就一起展示。</li>
+        </ul>
+        <div class="mini-grid">
+          <div class="mini"><strong>高质量回答</strong><span>结论具体，且每个关键点都有出处。</span></div>
+          <div class="mini"><strong>低质量回答</strong><span>证据偏题、只检到一边，或泛泛而谈。</span></div>
+          <div class="mini"><strong>证据不足</strong><span>应该明确说 insufficient，而不是编。</span></div>
+          <div class="mini"><strong>人工可查</strong><span>通过 node_id 回到原始 chunk。</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top: 20px;">
+      <h2>回答前先看两个诊断指标</h2>
+      <table class="table">
+        <tr><th>指标</th><th>含义</th><th>为什么重要</th></tr>
+        <tr><td><code>Retrieval strength</code></td><td>由 top1 和 top5 分数计算。</td><td>判断是否找到了强相关证据；不被 coverage 降级。</td></tr>
+        <tr><td><code>Evidence diversity</code></td><td>前 8 条证据来自多少不同 PMCID。</td><td>区分“多篇文章支持”和“核心论文集中命中”。</td></tr>
+        <tr><td><code>query_coverage</code></td><td>重要 query terms 是否出现在证据里。</td><td>单独展示为诊断指标，但不参与 HIGH / MEDIUM / LOW。</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="header">
+      <div>
+        <h1>我们如何评测这个 RAG 是否真的有用？</h1>
+        <p class="subtitle">评测不是自动打分，而是生成对照报告，让人比较 GPT-only 和 RAG 在正确性、具体程度和证据支持上的差异。</p>
+      </div>
+      <div class="tag">6 / 6 Evaluation</div>
+    </div>
+
+    <div class="content">
+      <div class="panel">
+        <svg viewBox="0 0 720 455" role="img" aria-label="Evaluation workflow">
+          <g class="node">
+            <rect x="46" y="58" width="180" height="84" rx="9" fill="#fff7ed" stroke="#f1b271"></rect>
+            <text x="136" y="92" text-anchor="middle">30 个中文问题</text>
+            <text class="small" x="136" y="118" text-anchor="middle">HIGH / MEDIUM / LOW</text>
+
+            <rect x="278" y="40" width="180" height="76" rx="9" fill="#edf2ff" stroke="#9ab2f1"></rect>
+            <text x="368" y="72" text-anchor="middle">GPT-only</text>
+            <text class="small" x="368" y="96" text-anchor="middle">不看论文资料库</text>
+
+            <rect x="278" y="148" width="180" height="76" rx="9" fill="#eaf4ef" stroke="#7cc6a4"></rect>
+            <text x="368" y="180" text-anchor="middle">RAG answer</text>
+            <text class="small" x="368" y="204" text-anchor="middle">先检索再回答</text>
+
+            <rect x="510" y="94" width="170" height="92" rx="9" fill="#f2efff" stroke="#b6a6ea"></rect>
+            <text x="595" y="128" text-anchor="middle">Markdown 报告</text>
+            <text class="small" x="595" y="153" text-anchor="middle">并排展示答案</text>
+            <text class="small" x="595" y="174" text-anchor="middle">不自动评分</text>
+
+            <rect x="160" y="294" width="400" height="96" rx="9" fill="#fff1f3" stroke="#e89aa5"></rect>
+            <text x="360" y="328" text-anchor="middle">人工分析失败类型</text>
+            <text class="small" x="360" y="354" text-anchor="middle">retrieval failure / strength-diversity issue / prompt failure</text>
+            <text class="small" x="360" y="376" text-anchor="middle">例如 Q13：主要是 retrieval 没同时找够两边证据</text>
+          </g>
+          <path class="arrow" d="M226 100 C250 88 250 78 278 78"></path>
+          <path class="arrow" d="M226 112 C252 144 250 186 278 186"></path>
+          <path class="arrow" d="M458 78 C486 82 488 120 510 126"></path>
+          <path class="arrow" d="M458 186 C488 180 488 152 510 146"></path>
+          <path class="arrow" d="M595 186 C594 250 448 272 420 294"></path>
+        </svg>
+      </div>
+
+      <div>
+        <div class="panel">
+          <h2>问题集覆盖什么？</h2>
+          <ul class="points">
+            <li><strong>HIGH</strong>：RAG 应明显优于 GPT，例如 ER stress、PI4KB、耐药、预后。</li>
+            <li><strong>MEDIUM</strong>：常识性比较题，例如副凋亡 vs 铁死亡、焦亡、自噬。</li>
+            <li><strong>LOW</strong>：当前 corpus 外或无关问题，例如神经退行性疾病、天气、股票。</li>
+            <li><strong>Stress test</strong>：中文改写是否能正确映射到英文检索意图。</li>
+          </ul>
+        </div>
+        <div class="panel" style="margin-top: 14px;">
+          <h2>最终看什么？</h2>
+          <table class="table">
+            <tr><th>维度</th><th>人工判断重点</th></tr>
+            <tr><td>正确性</td><td>答案是否符合论文证据。</td></tr>
+            <tr><td>具体程度</td><td>是否给出机制、通路、药物或基因细节。</td></tr>
+            <tr><td>证据支持</td><td>关键结论后是否有可靠 node_id。</td></tr>
+            <tr><td>拒答能力</td><td>资料不足或问题无关时，是否避免硬答。</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>
