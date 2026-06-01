@@ -91,11 +91,14 @@ def xml_candidates_for_paper(store: LiteratureStore, paper: dict[str, str]) -> l
                 "remote_url": pmc_oai_url(pmcid),
             }
         )
+        return dedupe_candidates(candidates)
 
     for source_record in store.source_records:
         if source_record.get("paper_id") != paper.get("paper_id"):
             continue
         raw = decode_json(source_record.get("raw_json", ""))
+        if not has_europe_pmc_fulltext_xml(raw):
+            continue
         url = raw.get("europe_pmc_fulltext_xml_url", "") if isinstance(raw, dict) else ""
         if url:
             candidates.append(
@@ -107,6 +110,16 @@ def xml_candidates_for_paper(store: LiteratureStore, paper: dict[str, str]) -> l
                 }
             )
     return dedupe_candidates(candidates)
+
+
+def has_europe_pmc_fulltext_xml(raw: Any) -> bool:
+    if not isinstance(raw, dict):
+        return False
+    source = str(raw.get("source", ""))
+    source_id = str(raw.get("id", ""))
+    if not source or not source_id:
+        return False
+    return source == "PMC" or str(raw.get("inEPMC", "")).upper() == "Y"
 
 
 def first_source_record_id(store: LiteratureStore, paper_id: str, sources: list[str]) -> str:

@@ -34,6 +34,7 @@ def node_metadata(node: dict[str, Any]) -> dict[str, Any]:
         "year": node.get("year"),
         "journal": node.get("journal"),
         "keywords": node.get("keywords", []),
+        "content_type": node.get("content_type", "fulltext"),
         "section_title": node.get("section_title"),
         "section_type": node.get("section_type"),
         "section_index": node.get("section_index"),
@@ -80,15 +81,24 @@ def retrieve(
     query: str,
     top_k: int,
     exclude_section_types: list[str],
+    include_content_types: list[str] | None = None,
+    exclude_content_types: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     requested_top_k = top_k + len(exclude_section_types) * top_k
     retriever = index.as_retriever(similarity_top_k=max(top_k, requested_top_k))
     excluded = {section_type.casefold() for section_type in exclude_section_types}
+    included_content = {content_type.casefold() for content_type in include_content_types or []}
+    excluded_content = {content_type.casefold() for content_type in exclude_content_types or []}
     results: list[dict[str, Any]] = []
 
     for result in retriever.retrieve(query):
         metadata = result.node.metadata
         if (metadata.get("section_type") or "").casefold() in excluded:
+            continue
+        content_type = (metadata.get("content_type") or "fulltext").casefold()
+        if included_content and content_type not in included_content:
+            continue
+        if content_type in excluded_content:
             continue
         results.append(format_result(result.score or 0.0, metadata, result.node.get_content()))
         if len(results) >= top_k:
@@ -102,8 +112,10 @@ def benchmark(
     model_name: str,
     top_k: int,
     exclude_section_types: list[str],
+    include_content_types: list[str] | None = None,
+    exclude_content_types: list[str] | None = None,
 ) -> None:
-    nodes = filter_nodes(load_nodes(nodes_path), exclude_section_types)
+    nodes = filter_nodes(load_nodes(nodes_path), exclude_section_types, include_content_types, exclude_content_types)
     index = load_index(storage_dir, model_name)
 
     for query in DEFAULT_QUERIES_FOR_BENCHMARK:
@@ -111,10 +123,12 @@ def benchmark(
             format_result(score, node_metadata(node), node.get("text", ""))
             for score, node in bm25_search(nodes, query, top_k)
         ]
-        llama_results = retrieve(index, query, top_k, exclude_section_types)
+        llama_results = retrieve(index, query, top_k, exclude_section_types, include_content_types, exclude_content_types)
         print(f"\n=== {query} ===")
         print("BM25 section_type distribution:", dict(section_type_counts(bm25_results)))
         print("LlamaIndex section_type distribution:", dict(section_type_counts(llama_results)))
+        print("BM25 content_type distribution:", dict(content_type_counts(bm25_results)))
+        print("LlamaIndex content_type distribution:", dict(content_type_counts(llama_results)))
         print("BM25 Top 10:")
         for result in bm25_results:
             print(json.dumps(result, ensure_ascii=False))
@@ -136,10 +150,15 @@ def section_type_counts(results: list[dict[str, Any]]) -> Counter[str]:
     return Counter(result.get("section_type") or "missing" for result in results)
 
 
+def content_type_counts(results: list[dict[str, Any]]) -> Counter[str]:
+    return Counter(result.get("content_type") or "missing" for result in results)
+
+
 def format_result(score: float, metadata: dict[str, Any], text: str) -> dict[str, Any]:
     return {
         "score": round(score, 4),
         "title": metadata.get("title"),
+        "content_type": metadata.get("content_type", "fulltext"),
         "section_title": metadata.get("section_title"),
         "section_type": metadata.get("section_type"),
         "node_id": metadata.get("node_id"),
@@ -218,6 +237,18 @@ def main() -> None:
         default=[],
         help="Section type to exclude, e.g. methods. Can be passed multiple times.",
     )
+    parser.add_argument(
+        "--include-content-type",
+        action="append",
+        default=[],
+        help="Content type to include, e.g. abstract or fulltext. Can be passed multiple times.",
+    )
+    parser.add_argument(
+        "--exclude-content-type",
+        action="append",
+        default=[],
+        help="Content type to exclude, e.g. abstract. Can be passed multiple times.",
+    )
     args = parser.parse_args()
 
     if args.command == "build":
@@ -227,14 +258,29 @@ def main() -> None:
         return
 
     if args.command == "benchmark":
-        benchmark(args.nodes, args.storage_dir, args.model, args.top_k, args.exclude_section_type)
+        benchmark(
+            args.nodes,
+            args.storage_dir,
+            args.model,
+            args.top_k,
+            args.exclude_section_type,
+            args.include_content_type,
+            args.exclude_content_type,
+        )
         return
 
     index = load_index(args.storage_dir, args.model)
     queries = args.query or DEFAULT_QUERIES
     for query in queries:
         print(f"\n=== {query} ===")
-        for result in retrieve(index, query, args.top_k, args.exclude_section_type):
+        for result in retrieve(
+            index,
+            query,
+            args.top_k,
+            args.exclude_section_type,
+            args.include_content_type,
+            args.exclude_content_type,
+        ):
             print(json.dumps(result, ensure_ascii=False))
 
 

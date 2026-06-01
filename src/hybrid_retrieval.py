@@ -12,6 +12,7 @@ from llamaindex_retrieval import (
     format_result,
     load_index,
     node_metadata,
+    content_type_counts,
     retrieve as embedding_retrieve,
     section_type_counts,
 )
@@ -39,6 +40,8 @@ def hybrid_search(
     query: str,
     top_k: int,
     exclude_section_types: list[str],
+    include_content_types: list[str] | None = None,
+    exclude_content_types: list[str] | None = None,
     bm25_weight: float = DEFAULT_BM25_WEIGHT,
     embedding_weight: float = DEFAULT_EMBEDDING_WEIGHT,
     penalize_single_source: bool = True,
@@ -51,7 +54,14 @@ def hybrid_search(
         format_result(score, node_metadata(node), node.get("text", ""))
         for score, node in bm25_search(nodes, query, candidate_k)
     ]
-    embedding_results = embedding_retrieve(index, query, candidate_k, exclude_section_types)
+    embedding_results = embedding_retrieve(
+        index,
+        query,
+        candidate_k,
+        exclude_section_types,
+        include_content_types,
+        exclude_content_types,
+    )
 
     hybrid_results = rank_hybrid_results(
         bm25_results,
@@ -198,6 +208,8 @@ def benchmark(
     queries: list[str],
     top_k: int,
     exclude_section_types: list[str],
+    include_content_types: list[str],
+    exclude_content_types: list[str],
     bm25_weight: float,
     embedding_weight: float,
     penalize_single_source: bool,
@@ -212,6 +224,8 @@ def benchmark(
             query,
             top_k,
             exclude_section_types,
+            include_content_types,
+            exclude_content_types,
             bm25_weight,
             embedding_weight,
             penalize_single_source,
@@ -224,6 +238,9 @@ def benchmark(
         print("BM25 section_type distribution:", dict(section_type_counts(bm25_results)))
         print("Embedding section_type distribution:", dict(section_type_counts(embedding_results)))
         print("Hybrid section_type distribution:", dict(section_type_counts(hybrid_results)))
+        print("BM25 content_type distribution:", dict(content_type_counts(bm25_results)))
+        print("Embedding content_type distribution:", dict(content_type_counts(embedding_results)))
+        print("Hybrid content_type distribution:", dict(content_type_counts(hybrid_results)))
         print("BM25 Top 10:")
         for result in bm25_results:
             print(json.dumps(result, ensure_ascii=False))
@@ -264,9 +281,26 @@ def main() -> None:
         default=[],
         help="Section type to exclude, e.g. methods. Can be passed multiple times.",
     )
+    parser.add_argument(
+        "--include-content-type",
+        action="append",
+        default=[],
+        help="Content type to include, e.g. abstract or fulltext. Can be passed multiple times.",
+    )
+    parser.add_argument(
+        "--exclude-content-type",
+        action="append",
+        default=[],
+        help="Content type to exclude, e.g. abstract. Can be passed multiple times.",
+    )
     args = parser.parse_args()
 
-    nodes = filter_nodes(load_nodes(args.nodes), args.exclude_section_type)
+    nodes = filter_nodes(
+        load_nodes(args.nodes),
+        args.exclude_section_type,
+        args.include_content_type,
+        args.exclude_content_type,
+    )
     index = load_index(args.storage_dir, args.model)
     queries = args.query or DEFAULT_QUERIES
 
@@ -279,6 +313,8 @@ def main() -> None:
                 query,
                 args.top_k,
                 args.exclude_section_type,
+                args.include_content_type,
+                args.exclude_content_type,
                 args.bm25_weight,
                 args.embedding_weight,
                 args.penalize_single_source,
@@ -296,6 +332,8 @@ def main() -> None:
         DEFAULT_BENCHMARK_QUERIES,
         args.top_k,
         args.exclude_section_type,
+        args.include_content_type,
+        args.exclude_content_type,
         args.bm25_weight,
         args.embedding_weight,
         args.penalize_single_source,

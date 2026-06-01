@@ -79,6 +79,8 @@ def answer_query(
     bm25_only_penalty: float,
     embedding_only_penalty: float,
     max_context_chars: int,
+    include_content_types: list[str] | None = None,
+    exclude_content_types: list[str] | None = None,
     show_context: bool = False,
     save_context: bool = False,
     debug_context_path: Path = Path("data/debug_context.txt"),
@@ -91,6 +93,8 @@ def answer_query(
         openai_model=openai_model,
         top_k=top_k,
         exclude_section_types=exclude_section_types,
+        include_content_types=include_content_types,
+        exclude_content_types=exclude_content_types,
         bm25_weight=bm25_weight,
         embedding_weight=embedding_weight,
         penalize_single_source=penalize_single_source,
@@ -113,6 +117,8 @@ def run_rag_pipeline(
     openai_model: str,
     top_k: int,
     exclude_section_types: list[str],
+    include_content_types: list[str] | None,
+    exclude_content_types: list[str] | None,
     bm25_weight: float,
     embedding_weight: float,
     penalize_single_source: bool,
@@ -128,7 +134,7 @@ def run_rag_pipeline(
         raise SystemExit("OPENAI_API_KEY is not set.")
 
     all_nodes = load_nodes(nodes_path)
-    nodes = filter_nodes(all_nodes, exclude_section_types)
+    nodes = filter_nodes(all_nodes, exclude_section_types, include_content_types, exclude_content_types)
     node_lookup = {node["node_id"]: node for node in all_nodes}
     index = load_index(storage_dir, embedding_model)
     original_query = query
@@ -144,6 +150,8 @@ def run_rag_pipeline(
         query=normalized_query,
         top_k=top_k,
         exclude_section_types=exclude_section_types,
+        include_content_types=include_content_types,
+        exclude_content_types=exclude_content_types,
         bm25_weight=bm25_weight,
         embedding_weight=embedding_weight,
         penalize_single_source=penalize_single_source,
@@ -192,6 +200,7 @@ def enrich_evidence(
                 "title": result.get("title"),
                 "section_title": result.get("section_title"),
                 "section_type": result.get("section_type"),
+                "content_type": result.get("content_type") or node.get("content_type", "fulltext"),
                 "pmcid": node.get("pmcid") or pmcid_from_node_id(result.get("node_id")),
                 "score": result.get("hybrid_score", result.get("score")),
                 "bm25_score": result.get("bm25_score"),
@@ -404,6 +413,7 @@ def build_context_debug_report(
                 f"Node ID: {item.get('node_id')}",
                 f"PMCID: {item.get('pmcid')}",
                 f"Title: {item.get('title')}",
+                f"Content Type: {item.get('content_type')}",
                 f"Section Title: {item.get('section_title')}",
                 f"Section Type: {item.get('section_type')}",
                 "Text:",
@@ -464,6 +474,7 @@ def print_answer(answer: str, evidence: list[dict[str, Any]], original_query: st
     for index, item in enumerate(evidence, start=1):
         print(f"{index}. {item.get('node_id')}")
         print(f"   title: {item.get('title')}")
+        print(f"   content_type: {item.get('content_type')}")
         print(f"   section_title: {item.get('section_title')}")
         print(f"   score: {item.get('score')}")
         print(f"   preview: {preview(item.get('quote', ''))}")
@@ -498,6 +509,18 @@ def main() -> None:
         default=DEFAULT_EXCLUDED_SECTION_TYPES.copy(),
         help="Section type to exclude. Defaults to methods. Can be passed multiple times.",
     )
+    parser.add_argument(
+        "--include-content-type",
+        action="append",
+        default=[],
+        help="Content type to include, e.g. abstract or fulltext. Can be passed multiple times.",
+    )
+    parser.add_argument(
+        "--exclude-content-type",
+        action="append",
+        default=[],
+        help="Content type to exclude, e.g. abstract. Can be passed multiple times.",
+    )
     parser.add_argument("--max-context-chars", type=int, default=MAX_CONTEXT_CHARS_PER_NODE)
     parser.add_argument(
         "--no-query-normalization",
@@ -524,6 +547,8 @@ def main() -> None:
         openai_model=args.openai_model,
         top_k=args.top_k,
         exclude_section_types=args.exclude_section_type,
+        include_content_types=args.include_content_type,
+        exclude_content_types=args.exclude_content_type,
         bm25_weight=args.bm25_weight,
         embedding_weight=args.embedding_weight,
         penalize_single_source=args.penalize_single_source,

@@ -19,6 +19,9 @@ except ImportError:  # Allows smoke tests before dependencies are installed.
 DEFAULT_XML_DIR = Path("fulltext_xml")
 DEFAULT_OUTPUT = Path("data/nodes.jsonl")
 DEFAULT_METADATA_OUTPUT = Path("data/metadata.jsonl")
+DEFAULT_LITERATURE_DIR = Path("data/literature")
+DEFAULT_CONTENT_ASSETS_PATH = DEFAULT_LITERATURE_DIR / "content_assets.json"
+DEFAULT_PAPERS_PATH = DEFAULT_LITERATURE_DIR / "papers.json"
 CHUNK_SIZE_CHARS = 3600
 CHUNK_OVERLAP_CHARS = 600
 MIN_TEXT_CHARS = 100
@@ -102,6 +105,8 @@ def build_nodes(
     output_path: Path = DEFAULT_OUTPUT,
     metadata_output_path: Path = DEFAULT_METADATA_OUTPUT,
     limit: int | None = None,
+    content_assets_path: Path = DEFAULT_CONTENT_ASSETS_PATH,
+    papers_path: Path = DEFAULT_PAPERS_PATH,
 ) -> tuple[int, list[dict[str, Any]], list[dict[str, Any]]]:
     xml_files = sorted(xml_dir.glob("*.xml"))
     if limit is not None:
@@ -112,6 +117,7 @@ def build_nodes(
     node_dicts: list[dict[str, Any]] = []
     metadata_dicts: list[dict[str, Any]] = []
     article_count = 0
+    seen_node_ids: set[str] = set()
 
     for xml_file in xml_files:
         article = parse_pmc_xml(xml_file)
@@ -130,6 +136,14 @@ def build_nodes(
                 node_dict = _node_dict(article, section, chunk_text, chunk_index)
                 _make_text_node(node_dict)
                 node_dicts.append(node_dict)
+                seen_node_ids.add(node_dict["node_id"])
+
+    for abstract_node in abstract_nodes(content_assets_path, papers_path):
+        if abstract_node["node_id"] in seen_node_ids:
+            continue
+        _make_text_node(abstract_node)
+        node_dicts.append(abstract_node)
+        seen_node_ids.add(abstract_node["node_id"])
 
     with output_path.open("w", encoding="utf-8") as handle:
         for node in node_dicts:
@@ -250,12 +264,66 @@ def _node_dict(
         "year": article.get("year"),
         "journal": article.get("journal"),
         "keywords": article.get("keywords", []),
+        "content_type": "fulltext",
         "section_title": section["section_title"],
         "section_type": infer_section_type(section["section_title"]),
         "section_index": section_index,
         "chunk_index": chunk_index,
         "source_file": article["source_file"],
     }
+
+
+def abstract_nodes(content_assets_path: Path, papers_path: Path) -> list[dict[str, Any]]:
+    papers = load_json_rows(papers_path)
+    paper_by_id = {paper.get("paper_id"): paper for paper in papers if paper.get("paper_id")}
+    best_abstract_by_paper_id: dict[str, dict[str, Any]] = {}
+    for asset in load_json_rows(content_assets_path):
+        if asset.get("content_type") != "abstract":
+            continue
+        paper_id = asset.get("paper_id", "")
+        text = clean_citation_residue(asset.get("text", ""))
+        if not paper_id or len("".join(text.split())) < MIN_TEXT_CHARS:
+            continue
+        existing = best_abstract_by_paper_id.get(paper_id)
+        if existing is None or len(text) > len(existing.get("text", "")):
+            best_abstract_by_paper_id[paper_id] = {**asset, "text": text}
+
+    nodes: list[dict[str, Any]] = []
+    for paper_id, asset in sorted(best_abstract_by_paper_id.items()):
+        paper = paper_by_id.get(paper_id, {})
+        identifier = paper.get("pmcid") or paper_id
+        node = {
+            "node_id": f"{identifier}:abstract:chunk0",
+            "text": asset["text"],
+            "paper_id": paper_id,
+            "pmcid": paper.get("pmcid") or None,
+            "pmid": paper.get("pmid") or None,
+            "doi": paper.get("doi") or None,
+            "title": paper.get("title") or "",
+            "year": paper.get("year") or paper.get("publication_year") or "",
+            "journal": paper.get("journal_title") or paper.get("journal_iso") or "",
+            "keywords": [],
+            "content_type": "abstract",
+            "section_title": "Abstract",
+            "section_type": "abstract",
+            "section_index": -1,
+            "chunk_index": 0,
+            "source_file": content_assets_path.as_posix(),
+        }
+        nodes.append(node)
+    return nodes
+
+
+def load_json_rows(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(data, list):
+        return []
+    return [row for row in data if isinstance(row, dict)]
 
 
 def infer_section_type(section_title: str) -> str:
@@ -335,12 +403,26 @@ def main() -> None:
     parser.add_argument("--xml-dir", type=Path, default=DEFAULT_XML_DIR)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--metadata-output", type=Path, default=DEFAULT_METADATA_OUTPUT)
+    parser.add_argument("--content-assets", type=Path, default=DEFAULT_CONTENT_ASSETS_PATH)
+    parser.add_argument("--papers", type=Path, default=DEFAULT_PAPERS_PATH)
     parser.add_argument("--limit", type=int, default=None)
     args = parser.parse_args()
 
-    article_count, nodes, metadata = build_nodes(args.xml_dir, args.output, args.metadata_output, args.limit)
+    article_count, nodes, metadata = build_nodes(
+        args.xml_dir,
+        args.output,
+        args.metadata_output,
+        args.limit,
+        args.content_assets,
+        args.papers,
+    )
     print(f"Parsed articles: {article_count}")
     print(f"Generated nodes: {len(nodes)}")
+    content_type_counts: dict[str, int] = {}
+    for node in nodes:
+        content_type = node.get("content_type") or "missing"
+        content_type_counts[content_type] = content_type_counts.get(content_type, 0) + 1
+    print(f"Content type distribution: {content_type_counts}")
     print(f"Wrote metadata records: {len(metadata)}")
     print("First 2 nodes:")
     for node in nodes[:2]:

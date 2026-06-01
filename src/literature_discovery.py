@@ -170,7 +170,7 @@ def source_record_from_europe_pmc(record: dict[str, Any], paper_id: str, keyword
     pmcid = normalize_pmcid(record.get("pmcid", ""))
     source_url = f"https://europepmc.org/article/{source}/{source_id}" if source and source_id else ""
     raw_record = dict(record)
-    if source and source_id:
+    if has_europe_pmc_fulltext_xml(record):
         raw_record["europe_pmc_fulltext_xml_url"] = f"{EUROPE_PMC_REST_BASE_URL}/{source}/{source_id}/fullTextXML"
     return {
         "paper_id": paper_id,
@@ -195,6 +195,14 @@ def europe_pmc_date(record: dict[str, Any]) -> str:
     if isinstance(journal_info, dict):
         return str(journal_info.get("printPublicationDate") or journal_info.get("yearOfPublication") or "")
     return ""
+
+
+def has_europe_pmc_fulltext_xml(record: dict[str, Any]) -> bool:
+    source = clean_text(record.get("source", ""))
+    source_id = clean_text(record.get("id", ""))
+    if not source or not source_id:
+        return False
+    return source == "PMC" or clean_text(record.get("inEPMC", "")).upper() == "Y"
 
 
 def match_keywords(title: Any, abstract: Any, keywords: list[str]) -> list[str]:

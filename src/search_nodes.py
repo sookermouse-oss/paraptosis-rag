@@ -47,14 +47,21 @@ def search(nodes: list[dict[str, Any]], query: str, top_k: int = 5) -> list[tupl
     return ranked[:top_k]
 
 
-def filter_nodes(nodes: list[dict[str, Any]], exclude_section_types: list[str] | None) -> list[dict[str, Any]]:
-    if not exclude_section_types:
-        return nodes
-    excluded = {section_type.casefold() for section_type in exclude_section_types}
+def filter_nodes(
+    nodes: list[dict[str, Any]],
+    exclude_section_types: list[str] | None,
+    include_content_types: list[str] | None = None,
+    exclude_content_types: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    excluded = {section_type.casefold() for section_type in exclude_section_types or []}
+    included_content = {content_type.casefold() for content_type in include_content_types or []}
+    excluded_content = {content_type.casefold() for content_type in exclude_content_types or []}
     return [
         node
         for node in nodes
         if (node.get("section_type") or "").casefold() not in excluded
+        and (not included_content or (node.get("content_type") or "fulltext").casefold() in included_content)
+        and (node.get("content_type") or "fulltext").casefold() not in excluded_content
     ]
 
 
@@ -148,9 +155,26 @@ def main() -> None:
         default=[],
         help="Section type to exclude, e.g. methods. Can be passed multiple times.",
     )
+    parser.add_argument(
+        "--include-content-type",
+        action="append",
+        default=[],
+        help="Content type to include, e.g. abstract or fulltext. Can be passed multiple times.",
+    )
+    parser.add_argument(
+        "--exclude-content-type",
+        action="append",
+        default=[],
+        help="Content type to exclude, e.g. abstract. Can be passed multiple times.",
+    )
     args = parser.parse_args()
 
-    nodes = filter_nodes(load_nodes(args.nodes), args.exclude_section_type)
+    nodes = filter_nodes(
+        load_nodes(args.nodes),
+        args.exclude_section_type,
+        args.include_content_type,
+        args.exclude_content_type,
+    )
     queries = args.query or DEFAULT_QUERIES
 
     for query in queries:
@@ -165,6 +189,7 @@ def main() -> None:
                     {
                         "score": round(score, 4),
                         "title": node.get("title"),
+                        "content_type": node.get("content_type"),
                         "section_title": node.get("section_title"),
                         "preview": _preview(node.get("text", "")),
                     },
