@@ -25,6 +25,12 @@ DEFAULT_OPENAI_MODEL = "gpt-5-mini"
 DEFAULT_EXCLUDED_SECTION_TYPES = ["methods"]
 MAX_CONTEXT_CHARS_PER_NODE = 1600
 CHINESE_CHAR_RE = re.compile(r"[\u4e00-\u9fff]")
+OPENAI_NETWORK_ERROR_HINT = (
+    "OpenAI request failed before a response was returned. "
+    "This is usually a network/proxy issue, an unavailable upstream service, or a timeout. "
+    "Retry the command after the proxy/network recovers. For Chinese queries, "
+    "you can pass --no-query-normalization to skip the OpenAI rewrite step, but retrieval quality may drop."
+)
 QUERY_NORMALIZATION_SYSTEM_PROMPT = """Rewrite the user's Chinese biomedical question into a concise English retrieval query for literature search.
 
 Rules:
@@ -47,6 +53,15 @@ Rules:
 - Keep the answer concise and mechanistic.
 - Do not begin with or include the label "Short answer:".
 - Return only the answer text. Do not print an Evidence section.
+"""
+
+CHINESE_TERMINOLOGY_PROMPT = """Chinese terminology rules:
+- Translate "paraptosis" as "副凋亡"; do not transliterate it as "帕拉托西斯".
+- Translate "apoptosis" as "凋亡", "ferroptosis" as "铁死亡", "pyroptosis" as "焦亡", and "necroptosis" as "坏死性凋亡".
+- Translate "ER stress" or "endoplasmic reticulum stress" as "内质网应激".
+- Prefer "不依赖 caspase" over "无半胱天冬酶依赖".
+- Keep gene/protein/drug names, pathway abbreviations, and node_id citations unchanged.
+- If the user's Chinese query already uses a domain term, keep that Chinese term in the answer.
 """
 
 
@@ -212,11 +227,12 @@ def normalize_retrieval_query(
         raise SystemExit("Missing OpenAI SDK. Install it with `pip install openai`.") from exc
 
     client = OpenAI()
-    response = client.responses.create(
+    response = create_openai_response(
+        client,
+        stage="query normalization",
         model=openai_model,
         instructions=QUERY_NORMALIZATION_SYSTEM_PROMPT,
-        input=original_query,
-        store=False,
+        input_text=original_query,
     )
     normalized = cleanup_normalized_query(response.output_text)
     if not normalized:
@@ -258,25 +274,73 @@ def call_openai(
     client = OpenAI()
     original_query = query
     normalized_query = normalized_query or query
-    response = client.responses.create(
+    response = create_openai_response(
+        client,
+        stage="answer generation",
         model=openai_model,
         instructions=build_system_prompt(original_query),
-        input=build_user_prompt(original_query, normalized_query, evidence),
-        store=False,
+        input_text=build_user_prompt(original_query, normalized_query, evidence),
     )
     return response.output_text.strip()
 
 
-def build_system_prompt(original_query: str) -> str:
-    answer_language = answer_language_for_query(original_query)
+def create_openai_response(
+    client: Any,
+    stage: str,
+    model: str,
+    instructions: str,
+    input_text: str,
+) -> Any:
+    try:
+        return client.responses.create(
+            model=model,
+            instructions=instructions,
+            input=input_text,
+            store=False,
+        )
+    except Exception as exc:
+        if is_openai_network_error(exc):
+            raise SystemExit(openai_error_message(stage, exc)) from exc
+        raise
+
+
+def is_openai_network_error(exc: Exception) -> bool:
+    module = type(exc).__module__
+    name = type(exc).__name__
+    return module.startswith(("openai", "httpx", "httpcore")) or name in {
+        "APIConnectionError",
+        "APITimeoutError",
+        "APIStatusError",
+        "APIError",
+        "RateLimitError",
+        "ProxyError",
+        "ConnectError",
+        "ReadTimeout",
+        "ConnectTimeout",
+    }
+
+
+def openai_error_message(stage: str, exc: Exception) -> str:
     return "\n".join(
         [
-            SYSTEM_PROMPT.strip(),
-            "",
-            f"The original query is in {answer_language}. Answer in {answer_language}.",
-            "Keep node_id citations in the original English format.",
+            f"OpenAI {stage} failed.",
+            f"{type(exc).__name__}: {exc}",
+            OPENAI_NETWORK_ERROR_HINT,
         ]
     )
+
+
+def build_system_prompt(original_query: str) -> str:
+    answer_language = answer_language_for_query(original_query)
+    parts = [
+        SYSTEM_PROMPT.strip(),
+        "",
+        f"The original query is in {answer_language}. Answer in {answer_language}.",
+        "Keep node_id citations in the original English format.",
+    ]
+    if contains_chinese(original_query):
+        parts.extend(["", CHINESE_TERMINOLOGY_PROMPT.strip()])
+    return "\n".join(parts)
 
 
 def build_user_prompt(original_query: str, normalized_query: str, evidence: list[dict[str, Any]]) -> str:

@@ -1,13 +1,90 @@
 # paraptosis-rag
 
-Minimal ingestion pipeline for PMC full-text XML files.
+Minimal literature acquisition, ingestion, retrieval, and RAG answering pipeline for PMC full-text XML files.
+
+## Stage 0: Literature Metadata and XML Acquisition
+
+This stage keeps literature identity separate from content availability. One canonical paper can have many source records and many content assets.
+
+It writes three canonical tables under `data/literature/`:
+
+- `papers.csv/json`
+- `source_records.csv/json`
+- `content_assets.csv/json`
+
+Papers are deduplicated by DOI first, then PMID, then PMCID, then normalized title. Content availability lives only in `content_assets`; there is no global availability status on `papers`.
+
+Discovery and enrichment entry points:
+
+```bash
+./scripts/fetch-literature.sh
+./scripts/enrich-literature.sh --source pubmed --limit 100
+./scripts/enrich-literature.sh --source openalex --limit 100 --mailto you@example.com
+./scripts/enrich-literature.sh --source all --limit 100 --mailto you@example.com
+./scripts/fetch-fulltext-xml.sh --max-downloads 100
+```
+
+`fetch-literature.sh` runs `src.literature_discovery`, which uses Europe PMC as the main discovery source and searches `TITLE_ABS` when keywords are provided.
+
+Default discovery settings are defined in `src/literature_discovery.py`:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `keywords` | empty | Search terms matched against title/abstract. Empty means no keyword filter. |
+| `days_back` | `1460` | Date window for Europe PMC discovery. |
+| `timeout` | `30` | Per-request timeout. |
+| `source_page_size` | `100` | Page size per source request. |
+| `max_records` | `1000` | Safety cap for Europe PMC records scanned. |
+
+Run a metadata scan:
+
+```bash
+./scripts/fetch-literature.sh
+```
+
+Override keywords or limits at runtime:
+
+```bash
+./scripts/fetch-literature.sh --keywords "paraptosis,methuosis" --max-records 50
+```
+
+Download full-text XML for records in the master metadata:
+
+```bash
+./scripts/fetch-fulltext-xml.sh --max-downloads 100
+```
+
+Acquisition metadata is written under `data/literature/`. Downloaded XML is written to `fulltext_xml/`. Both directories are local data outputs and are not committed. The pipeline does not create GPT Markdown exports and never downloads PDFs automatically.
+
+Useful acquisition CLI defaults:
+
+| Command | Parameter | Default |
+| --- | --- | --- |
+| `fetch-literature.sh` | `--keywords` / `--keyword` | unset; no keyword filter |
+| `fetch-literature.sh` | `--days-back` | `1460` |
+| `fetch-literature.sh` | `--timeout` | `30` |
+| `fetch-literature.sh` | `--source-page-size` | `100` |
+| `fetch-literature.sh` | `--max-records` | `1000` |
+| `fetch-literature.sh` | `--data-dir` | `data/literature` |
+| `enrich-literature.sh` | `--source` | required: `pubmed`, `openalex`, or `all` |
+| `enrich-literature.sh` | `--limit` | unset |
+| `enrich-literature.sh` | `--data-dir` | `data/literature` |
+| `enrich-literature.sh` | `--timeout` | `30` |
+| `enrich-literature.sh` | `--mailto` | required for `openalex` or `all` |
+| `fetch-fulltext-xml.sh` | `--data-dir` | `data/literature` |
+| `fetch-fulltext-xml.sh` | `--timeout` | `30` |
+| `fetch-fulltext-xml.sh` | `--limit` | unset |
+| `fetch-fulltext-xml.sh` | `--max-downloads` | unset |
+| `fetch-fulltext-xml.sh` | `--xml-dir` | `fulltext_xml` |
+
+Large metadata enrichment runs call external APIs one paper at a time and can take several minutes. `enrich-literature.sh` prints each request and reports progress every 10 attempted papers.
 
 ## Stage 1: XML to Nodes JSONL
 
 This stage reads PMC/JATS XML files from:
 
 ```bash
-/Users/shuangsu/Documents/Projects/paraptosis-biorxiv-job/fulltext_xml
+fulltext_xml/
 ```
 
 It parses article metadata, abstract text, and body sections, chunks each section, and writes:
@@ -37,6 +114,12 @@ Smoke test on the first 3 XML files:
 
 ```bash
 python3 src/build_nodes.py --limit 3
+```
+
+To use XML files from another local directory:
+
+```bash
+python3 src/build_nodes.py --xml-dir /path/to/fulltext_xml --limit 500
 ```
 
 Run local BM25 search tests:
@@ -95,6 +178,10 @@ Run these from the project root:
 ```bash
 ./scripts/rag-build-500.sh
 ./scripts/rag-benchmark.sh
+./scripts/fetch-literature.sh
+./scripts/enrich-literature.sh --source pubmed --limit 100
+./scripts/enrich-literature.sh --source openalex --limit 100 --mailto you@example.com
+./scripts/fetch-fulltext-xml.sh --max-downloads 100
 ./scripts/rag-context.sh "What is the role of PI4KB in paraptosis?"
 ./scripts/rag-answer.sh "Can paraptosis help overcome drug resistance?"
 ./scripts/rag-compare.sh

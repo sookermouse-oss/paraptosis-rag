@@ -3,6 +3,10 @@ data/metadata.jsonl
 data/keyword_smoke_test.txt
 data/embeddings.jsonl
 data/llamaindex_storage/
+data/literature/
+data/debug_context.txt
+data/eval_zh_answers.md
+fulltext_xml/
 .venv/
 __pycache__/
 *.py[cod]

@@ -1,3 +1,4 @@
 llama-index
 llama-index-embeddings-huggingface
 sentence-transformers
+requests>=2.31.0

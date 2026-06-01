@@ -16,7 +16,7 @@ except ImportError:  # Allows smoke tests before dependencies are installed.
     TextNode = None
 
 
-DEFAULT_XML_DIR = Path("/Users/shuangsu/Documents/Projects/paraptosis-biorxiv-job/fulltext_xml")
+DEFAULT_XML_DIR = Path("fulltext_xml")
 DEFAULT_OUTPUT = Path("data/nodes.jsonl")
 DEFAULT_METADATA_OUTPUT = Path("data/metadata.jsonl")
 CHUNK_SIZE_CHARS = 3600

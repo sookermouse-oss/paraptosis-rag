@@ -11,6 +11,13 @@ if [[ ! -x ".venv/bin/python" ]]; then
   exit 1
 fi
 
-python3 src/build_nodes.py --limit 500
+XML_DIR="${XML_DIR:-fulltext_xml}"
+LEGACY_XML_DIR="/Users/shuangsu/Documents/Projects/paraptosis-biorxiv-job/fulltext_xml"
+
+if [[ ! -d "$XML_DIR" && -d "$LEGACY_XML_DIR" ]]; then
+  XML_DIR="$LEGACY_XML_DIR"
+fi
+
+python3 src/build_nodes.py --xml-dir "$XML_DIR" --limit 500
 rm -rf data/llamaindex_storage
 HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}" HF_HUB_DISABLE_XET=1 .venv/bin/python src/llamaindex_retrieval.py build
