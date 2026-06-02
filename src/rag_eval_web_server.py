@@ -19,13 +19,14 @@ BENCHMARK_PATH = PROJECT_ROOT / "src" / "benchmark_zh_rag_vs_gpt.py"
 QUESTION_RE = re.compile(r"^-\s+(.+?):\s*(.+?)\s*$")
 
 
-def run_question(question: str, timeout: int) -> dict[str, Any]:
+def run_question(question: str, timeout: int, report_ttl_days: int) -> dict[str, Any]:
     question = " ".join(question.split()).strip()
     if not question:
         raise ValueError("Question is empty.")
     if len(question) > 1000:
         raise ValueError("Question is too long; keep it under 1000 characters.")
 
+    cleanup_expired_reports(report_ttl_days)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     with tempfile.TemporaryDirectory(prefix="rag-gpt-vs-rag-web-") as tmp:
         tmp_path = Path(tmp)
@@ -68,6 +69,7 @@ def run_question(question: str, timeout: int) -> dict[str, Any]:
             )
 
         report = output_path.read_text(encoding="utf-8")
+        cleanup_expired_reports(report_ttl_days)
         return {
             "report": report,
             "output_path": str(output_path.relative_to(PROJECT_ROOT)),
@@ -124,7 +126,11 @@ class Handler(BaseHTTPRequestHandler):
             if length > 20000:
                 raise ValueError("Request body is too large.")
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            result = run_question(str(payload.get("question", "")), self.server.timeout_seconds)
+            result = run_question(
+                str(payload.get("question", "")),
+                self.server.timeout_seconds,
+                self.server.report_ttl_days,
+            )
             self.send_json({"ok": True, **result})
         except Exception as exc:
             self.send_json({"ok": False, "error": str(exc)}, status=500)
@@ -152,11 +158,33 @@ def request_path(raw_path: str) -> str:
     return "/"
 
 
+def cleanup_expired_reports(ttl_days: int) -> list[Path]:
+    if ttl_days <= 0:
+        return []
+    cutoff = time.time() - ttl_days * 24 * 60 * 60
+    removed: list[Path] = []
+    for pattern in ("eval_zh_gpt_vs_rag_web_*.md", "eval_zh_web_*.md"):
+        for path in (PROJECT_ROOT / "data").glob(pattern):
+            try:
+                if path.stat().st_mtime < cutoff:
+                    path.unlink()
+                    removed.append(path)
+            except FileNotFoundError:
+                continue
+    return removed
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Local web UI for Chinese GPT-only vs RAG benchmark runs.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--timeout", type=int, default=240)
+    parser.add_argument(
+        "--report-ttl-days",
+        type=int,
+        default=7,
+        help="Delete web-generated markdown reports older than this many days. Set 0 to disable.",
+    )
     args = parser.parse_args()
 
     if not HTML_PATH.exists():
@@ -166,7 +194,9 @@ def main() -> None:
 
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     server.timeout_seconds = args.timeout  # type: ignore[attr-defined]
+    server.report_ttl_days = args.report_ttl_days  # type: ignore[attr-defined]
     print(f"Serving GPT-only vs RAG eval UI at http://{args.host}:{args.port}", flush=True)
+    print(f"Web report TTL: {args.report_ttl_days} days", flush=True)
     print("Press Ctrl+C to stop.", flush=True)
     server.serve_forever()
 

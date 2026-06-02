@@ -182,6 +182,7 @@
       <div id="status" class="status">Ready. This can take 30-90 seconds because it calls retrieval and OpenAI.</div>
       <p class="hint">必须通过本地 server 打开：运行 <code>./scripts/rag-eval-web.sh</code>，然后访问 <code>http://127.0.0.1:8765</code>。不要直接双击 HTML 文件。</p>
       <p class="hint">本页面只适合本地使用。不要暴露到公网，因为后端会执行本仓库里的 benchmark 程序并调用 OpenAI API。</p>
+      <p class="hint">Web 生成的 timestamp markdown 报告默认保留 7 天；启动 server 时可用 <code>--report-ttl-days 0</code> 关闭清理。</p>
     </section>
 
     <section class="panel">

@@ -360,6 +360,8 @@ This writes:
 data/eval_zh_gpt_vs_rag.md
 ```
 
+`data/eval_zh_gpt_vs_rag.md` is a reusable baseline report and can be committed with the benchmark question set. Timestamped ad hoc reports such as `data/eval_zh_gpt_vs_rag_pi4kb_check.md` remain ignored.
+
 For a single-question GPT-only vs RAG test, create a temporary question file:
 
 ```bash
@@ -409,7 +411,13 @@ Do not open `docs/rag_eval_web.html` directly with `file://`; the page needs the
 
 The web UI accepts one Chinese question, calls `src/benchmark_zh_rag_vs_gpt.py`, and displays the generated markdown report. It is local-only; do not expose it to the public internet because the backend runs repository commands and calls the OpenAI API.
 
-The web UI is a convenience wrapper around the same command-line benchmark. It writes timestamped markdown reports under `data/`, which are ignored by git. If a browser shows `Failed to fetch`, it usually means the page was opened directly as a file or the local server is not running.
+The web UI is a convenience wrapper around the same command-line benchmark. It writes timestamped markdown reports under `data/`, which are ignored by git. Web-generated reports older than 7 days are cleaned up by default when the web server runs. Use `--report-ttl-days 0` to disable cleanup:
+
+```bash
+./scripts/rag-eval-web.sh --report-ttl-days 0
+```
+
+If a browser shows `Failed to fetch`, it usually means the page was opened directly as a file or the local server is not running.
 
 ## Slides
 
@@ -452,7 +460,8 @@ Most large or frequently regenerated local outputs are intentionally not committ
 | `data/llamaindex_storage/` | Local LlamaIndex vector store. |
 | `data/debug_context.txt` | Latest saved RAG debug context. |
 | `data/eval_zh_answers.md` | Chinese RAG-only benchmark report. |
-| `data/eval_zh_gpt_vs_rag*.md` | GPT-only vs RAG benchmark reports. |
+| `data/eval_zh_gpt_vs_rag.md` | Reusable GPT-only vs RAG baseline report. |
+| `data/eval_zh_gpt_vs_rag_*.md` | Ad hoc GPT-only vs RAG benchmark reports. |
 | `data/eval_zh_web*.md` | Web-triggered benchmark reports. |
 | `fulltext_xml/` | Downloaded PMC/JATS XML files. |
 
