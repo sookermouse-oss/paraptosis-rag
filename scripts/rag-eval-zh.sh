@@ -18,7 +18,8 @@ while [[ $# -gt 0 ]]; do
       cat <<'EOF'
 Usage: ./scripts/rag-eval-zh.sh [--questions-file PATH] [--output-file PATH]
 
-Run Chinese RAG QA benchmark questions and write a markdown report.
+Run RAG QA benchmark questions and write a markdown report.
+Questions can be Chinese or English.
 
 Options:
   --questions-file PATH  Questions file to read. Default: data/eval_zh_questions.txt
