@@ -1,9 +1,9 @@
-data/nodes.jsonl
-data/metadata.jsonl
 data/keyword_smoke_test.txt
 data/embeddings.jsonl
 data/llamaindex_storage/
-data/literature/
+data/literature/*
+!data/literature/papers.json
+!data/literature/content_assets.json
 data/debug_context.txt
 data/eval_zh_answers.md
 data/eval_zh_gpt_vs_rag*.md
