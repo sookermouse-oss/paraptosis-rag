@@ -26,6 +26,8 @@ DEFAULT_TOP_K = 8
 DEFAULT_OPENAI_MODEL = "gpt-5-mini"
 DEFAULT_EXCLUDED_SECTION_TYPES = ["methods"]
 DEFAULT_TERMINOLOGY_PATH = Path("config/terminology_zh_en.json")
+DEFAULT_ANSWER_STYLE = "scientist"
+ANSWER_STYLE_CHOICES = ("evidence", "scientist")
 MAX_CONTEXT_CHARS_PER_NODE = 1600
 CHINESE_CHAR_RE = re.compile(r"[\u4e00-\u9fff]")
 QUERY_TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
@@ -74,8 +76,32 @@ Rules:
 - Use only the retrieved nodes below.
 - If the retrieved nodes do not support an answer, explicitly say "evidence insufficient".
 - Do not invent citations, papers, mechanisms, or claims.
-- Cite the node_id after every key claim, e.g. [PMC123:sec1:chunk0].
+- Cite the exact full node_id after every key claim, e.g. [PMC123:sec1:chunk0].
+- Do not shorten node_id citations to PMCID-only citations.
 - Keep the answer concise and mechanistic.
+- Do not begin with or include the label "Short answer:".
+- Return only the answer text. Do not print an Evidence section.
+"""
+
+SCIENTIST_SYSTEM_PROMPT = """You answer biomedical RAG questions using only the retrieved context.
+
+Rules:
+- Use only the retrieved nodes below.
+- If the retrieved nodes do not support an answer, say so naturally.
+- Do not invent citations, papers, mechanisms, or claims.
+- Cite the exact full node_id for key claims, e.g. [PMC123:sec1:chunk0].
+- Do not shorten node_id citations to PMCID-only citations.
+- Answer like a biomedical researcher explaining to another researcher.
+- Start with the direct answer.
+- Synthesize evidence across nodes instead of listing node-by-node.
+- Do not follow the order of retrieved evidence mechanically.
+- Use citations for key claims, but do not cite every sentence.
+- Prefer clear mechanism flow: trigger → pathway → phenotype → implication.
+- If evidence is limited, say so naturally.
+- For Chinese answers, use fluent academic Chinese, not translationese.
+- Avoid repeating phrases like “现有证据指出” in every paragraph.
+- Keep the answer concise and mechanistic.
+- Keep the answer compact. Prefer 3–5 short paragraphs unless the question asks for detail.
 - Do not begin with or include the label "Short answer:".
 - Return only the answer text. Do not print an Evidence section.
 """
@@ -109,6 +135,7 @@ def answer_query(
     show_context: bool = False,
     save_context: bool = False,
     debug_context_path: Path = Path("data/debug_context.txt"),
+    answer_style: str = DEFAULT_ANSWER_STYLE,
 ) -> tuple[str, list[dict[str, Any]]]:
     result = run_rag_pipeline(
         query=query,
@@ -130,6 +157,7 @@ def answer_query(
         show_context=show_context,
         save_context=save_context,
         debug_context_path=debug_context_path,
+        answer_style=answer_style,
     )
     return result["answer"], result["evidence"]
 
@@ -154,6 +182,7 @@ def run_rag_pipeline(
     show_context: bool,
     save_context: bool,
     debug_context_path: Path,
+    answer_style: str = DEFAULT_ANSWER_STYLE,
 ) -> dict[str, Any]:
     if not os.environ.get("OPENAI_API_KEY"):
         raise SystemExit("OPENAI_API_KEY is not set.")
@@ -201,6 +230,7 @@ def run_rag_pipeline(
         original_query,
         evidence,
         normalized_query=normalized_query,
+        answer_style=answer_style,
     )
     return {
         "original_query": original_query,
@@ -356,6 +386,7 @@ def call_openai(
     query: str,
     evidence: list[dict[str, Any]],
     normalized_query: str | None = None,
+    answer_style: str = DEFAULT_ANSWER_STYLE,
 ) -> str:
     try:
         from openai import OpenAI
@@ -369,7 +400,7 @@ def call_openai(
         client,
         stage="answer generation",
         model=openai_model,
-        instructions=build_system_prompt(original_query),
+        instructions=build_system_prompt(original_query, answer_style),
         input_text=build_user_prompt(original_query, normalized_query, evidence),
     )
     return response.output_text.strip()
@@ -421,13 +452,16 @@ def openai_error_message(stage: str, exc: Exception) -> str:
     )
 
 
-def build_system_prompt(original_query: str) -> str:
+def build_system_prompt(original_query: str, answer_style: str = DEFAULT_ANSWER_STYLE) -> str:
+    if answer_style not in ANSWER_STYLE_CHOICES:
+        raise ValueError(f"Unknown answer style: {answer_style}")
     answer_language = answer_language_for_query(original_query)
+    base_prompt = SCIENTIST_SYSTEM_PROMPT if answer_style == "scientist" else SYSTEM_PROMPT
     parts = [
-        SYSTEM_PROMPT.strip(),
+        base_prompt.strip(),
         "",
         f"The original query is in {answer_language}. Answer in {answer_language}.",
-        "Keep node_id citations in the original English format.",
+        "Keep node_id citations in the original English format and include the full node_id, not just the PMCID.",
     ]
     if contains_chinese(original_query):
         parts.extend(["", CHINESE_TERMINOLOGY_PROMPT.strip()])
@@ -458,7 +492,8 @@ def build_user_prompt(original_query: str, normalized_query: str, evidence: list
             "Answer the original query using only these nodes.",
             f'If the nodes are not enough, say "{insufficient_answer(original_query)}".',
             'Do not use the phrase "Short answer:".',
-            "Every key conclusion must include one or more node_id citations.",
+            "Every key conclusion must include one or more exact full node_id citations, e.g. [PMC123:sec1:chunk0].",
+            "Do not cite only the PMCID when a full node_id is available.",
         ]
     )
 
@@ -703,6 +738,12 @@ def main() -> None:
     )
     parser.add_argument("--max-context-chars", type=int, default=MAX_CONTEXT_CHARS_PER_NODE)
     parser.add_argument(
+        "--answer-style",
+        choices=ANSWER_STYLE_CHOICES,
+        default=DEFAULT_ANSWER_STYLE,
+        help="Answer style. 'evidence' keeps the current evidence-forward prompt; 'scientist' synthesizes like a biomedical researcher.",
+    )
+    parser.add_argument(
         "--no-query-normalization",
         action="store_true",
         help="Disable Chinese query normalization before retrieval.",
@@ -739,6 +780,7 @@ def main() -> None:
         show_context=args.show_context,
         save_context=args.save_context,
         debug_context_path=Path("data/debug_context.txt"),
+        answer_style=args.answer_style,
     )
     print_answer(
         result["answer"],

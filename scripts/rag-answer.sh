@@ -22,4 +22,5 @@ if [[ $# -lt 1 || -z "${1:-}" ]]; then
 fi
 
 HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}" HF_HUB_DISABLE_XET=1 .venv/bin/python src/rag_answer.py \
-  --query "$1"
+  --query "$1" \
+  "${@:2}"
