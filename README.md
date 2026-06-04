@@ -22,11 +22,14 @@ Discovery and enrichment entry points:
 ./scripts/fetch-literature.sh
 ./scripts/enrich-literature.sh --source pubmed --limit 100
 ./scripts/enrich-literature.sh --source openalex --limit 100 --mailto you@example.com
+./scripts/enrich-literature.sh --source preprint --limit 100
 ./scripts/enrich-literature.sh --source all --limit 100 --mailto you@example.com
 ./scripts/fetch-fulltext-xml.sh --max-downloads 100
 ```
 
 `fetch-literature.sh` runs `src.literature_discovery`, which uses Europe PMC as the main discovery source and searches `TITLE_ABS` when keywords are provided.
+
+`enrich-literature.sh --source preprint` enriches existing bioRxiv/medRxiv preprint records. Europe PMC already indexes preprint abstracts, so `fetch-literature.sh` can discover matching preprint DOI records first; preprint enrichment then calls the bioRxiv API per DOI to add latest version, license, published-version DOI, and JATS XML pointer. This adds source records and abstract assets only; it does not download full text or PDFs.
 
 What each script does:
 
@@ -35,6 +38,7 @@ What each script does:
 | `fetch-literature.sh` | Discover candidate papers from Europe PMC and write canonical literature tables. | Does not download full text. |
 | `enrich-literature.sh --source pubmed` | Add PubMed EFetch metadata such as MeSH terms, publication types, journal fields, and grants. | Does not fetch full text. |
 | `enrich-literature.sh --source openalex` | Add OpenAlex metadata such as citation count, OA status, publication dates, and concepts. | Does not create content assets. |
+| `enrich-literature.sh --source preprint` | Add bioRxiv/medRxiv version, license, published DOI, JATS XML pointer, and abstract assets for existing preprint DOI records. | Does not discover new keywords, download XML, or download PDFs. |
 | `fetch-fulltext-xml.sh` | Download PMC/JATS XML for records with available XML links. | Does not download PDFs. |
 
 Default discovery settings are defined in `src/literature_discovery.py`:
@@ -77,11 +81,14 @@ Useful acquisition CLI defaults:
 | `fetch-literature.sh` | `--source-page-size` | `100` |
 | `fetch-literature.sh` | `--max-records` | `1000` |
 | `fetch-literature.sh` | `--data-dir` | `data/literature` |
-| `enrich-literature.sh` | `--source` | required: `pubmed`, `openalex`, or `all` |
+| `enrich-literature.sh` | `--source` | required: `pubmed`, `openalex`, `preprint`, or `all` |
 | `enrich-literature.sh` | `--limit` | unset |
 | `enrich-literature.sh` | `--data-dir` | `data/literature` |
 | `enrich-literature.sh` | `--timeout` | `30` |
 | `enrich-literature.sh` | `--mailto` | required for `openalex` or `all` |
+| `enrich-literature.sh` | `--preprint-server` | `all` |
+| `enrich-literature.sh` | `--request-delay` | `0.0` |
+| `enrich-literature.sh` | `--skip-if-published` | disabled |
 | `fetch-fulltext-xml.sh` | `--data-dir` | `data/literature` |
 | `fetch-fulltext-xml.sh` | `--timeout` | `30` |
 | `fetch-fulltext-xml.sh` | `--limit` | unset |
@@ -464,6 +471,7 @@ Run these from the project root:
 ./scripts/rag-build-500.sh
 ./scripts/rag-benchmark.sh
 ./scripts/fetch-literature.sh
+./scripts/enrich-literature.sh --source preprint --limit 100
 ./scripts/enrich-literature.sh --source pubmed --limit 100
 ./scripts/enrich-literature.sh --source openalex --limit 100 --mailto you@example.com
 ./scripts/fetch-fulltext-xml.sh --max-downloads 100

@@ -8903,5 +8903,83 @@
     "mime_type": "application/xml",
     "text": "",
     "updated_at": "2026-06-01T10:54:14+00:00"
+  },
+  {
+    "content_asset_id": "asset_fa96efb97d015b28",
+    "paper_id": "paper_439f89994063b5e5",
+    "source_record_id": "source_1765c4addb082d0f",
+    "source": "biorxiv",
+    "content_type": "abstract",
+    "status": "available",
+    "remote_url": "https://www.biorxiv.org/content/10.1101/2024.08.07.606501v1",
+    "local_path": "",
+    "mime_type": "text/plain",
+    "text": "Paraptosis is a novel form of programmed cell death characterized by distinct morphological features such as swelling of the endoplasmic reticulum and mitochondria, and cytoplasmic vacuolation. Unlike apoptosis, paraptosis does not involve the activation of caspases or DNA fragmentation. These unique features make paraptosis an intriguing target for cancer therapy, particularly against apoptosis-resistant cells. Here, we report a novel morphological feature of paraptosis: the formation of high-density spherical structure, which we tentatively term \"paraptosome.\" We found that these putative paraptosomes originate from the Golgi apparatus, appearing as high-density formations under light microscopy and colocalizing with the trans-Golgi marker {beta}4GALT1-RFP. Time-lapse confocal microscopy and immunostaining demonstrated that putative paraptosomes form due to Golgi stress or disintegration, leading to severe disruption of Golgi function. Furthermore, we show that paraptosis inducers such as glabridin, morusin, and honokiol can cause significant alterations in the endoplasmic reticulum, mitochondria, autophagosomes, and lysosomes in U251MG glioblastoma cells; however, the formation of putative paraptosomes is not induced by isolated stress inducers. Collectively, these findings suggest that the putative paraptosome may be a novel characteristic structure of paraptosis. The discovery of paraptosomes provides a unique marker for defining paraptotic cell death and offers new insights into the characteristic pathological phenomena associated with multiple organelle dysfunction. This finding broadens the scope of cell biology research by introducing a new structural paradigm linked to paraptosis and may have implications for developing targeted therapies against apoptosis-resistant cancers.",
+    "updated_at": "2026-06-04T10:15:56+00:00"
+  },
+  {
+    "content_asset_id": "asset_036ff638ca07ba3f",
+    "paper_id": "paper_243c0d072763b026",
+    "source_record_id": "source_a1485dafd9850443",
+    "source": "biorxiv",
+    "content_type": "abstract",
+    "status": "available",
+    "remote_url": "https://www.biorxiv.org/content/10.1101/2021.05.05.442746v1",
+    "local_path": "",
+    "mime_type": "text/plain",
+    "text": "Zika virus (ZIKV) is an arbovirus member of the Flaviviridae family that causes severe congenital brain anomalies in infected fetuses. Human neural progenitor cells (hNPCs) are highly permissive to ZIKV infection, causing inhibition of cell proliferation concomitant with an induction of cell death. We previously demonstrated that pharmaceutical-grade heparin inhibited virus-induced cell death with minor effects on in vitro virus replication in ZIKV-infected hNPCs. Here we show that heparin prevented ZIKV-induced intracellular vacuoles, a signature characteristic of paraptosis, but also inhibited necrosis and apoptosis of hNPCs when grown as neurospheres (NS). Furthermore, heparin preserved the differentiation of both ZIKV-infected human-induced pluripotent stem cells (hiPSC) derived-NPCs and fetus-derived NPCs into neural-glial cells. Collectively, these results highlight the potential neuroprotective effect of heparin that could be re-purposed and exploited to drive the development of novel agents for preventing ZIKV damage.",
+    "updated_at": "2026-06-04T10:15:57+00:00"
+  },
+  {
+    "content_asset_id": "asset_7348d89f3bd0f3f3",
+    "paper_id": "paper_47e7490969781418",
+    "source_record_id": "source_f90d568024b5ecee",
+    "source": "biorxiv",
+    "content_type": "abstract",
+    "status": "available",
+    "remote_url": "https://www.biorxiv.org/content/10.1101/2021.07.23.453185v1",
+    "local_path": "",
+    "mime_type": "text/plain",
+    "text": "Transforming Growth Factor-{beta}s (TGF{beta}s)/Activins and Bone Morphogenetic Proteins (BMPs) have been implicated in numerous aspects of hepatic pathophysiology. However, the way by which hepatocytes integrate and decode the interplay between the TGF{beta}/Activin and BMP branches in health and disease is still not fully understood. To address this, TGF{beta}/BMP Smad- responsive double transgenic reporter mice were generated and utilized to map patterns of TGF{beta}- and/or BMP-pathway activation during acetaminophen- induced liver injury. TGF{beta} signaling was blocked either pharmacologically or by Smad7 over-expression and the transcriptomes of canonical TGF{beta}- and/or BMP4-treated hepatospheres and Smad7-treated livers were analyzed to highlight TGF{beta}-superfamily-regulated pathways and processes. Acetaminophen administration led to dynamically evolving, stage- and context-specific, patterns of hepatic TGF{beta}/Activin and BMP-reporter expression. TGF{beta}-superfamily signaling was activated in an autophagy prone zone at the borders between healthy and injured tissue. Inhibition of TGF{beta}-superfamily signaling attenuated autophagy, exacerbated liver histopathology, and finally led to accelerated tissue-recovery. Hallmarks of this process were the paraptosis-like cell death and the attenuation of immune and reparatory cell responses. Transcriptomic analysis highlighted autophagy as a prominent TGF{beta}1- and BMP4-regulated process and recognized Trp53inp2 as the top TGF{beta}-superfamily-regulated autophagy-related gene. Collectively, these findings implicate the coordinated activation of both canonical TGF{beta}-superfamily signalling branches in balancing autophagic response and tissue-reparatory and -regenerative processes upon acetaminophen-induced hepatotoxicity, highlighting opportunities and putative risks associated with their targeting for treatment of hepatic diseases.",
+    "updated_at": "2026-06-04T10:15:58+00:00"
+  },
+  {
+    "content_asset_id": "asset_97bcf23162b91551",
+    "paper_id": "paper_561cc6e5ac47a393",
+    "source_record_id": "source_f7cd142a2ebaa19e",
+    "source": "biorxiv",
+    "content_type": "abstract",
+    "status": "available",
+    "remote_url": "https://www.biorxiv.org/content/10.1101/2025.09.24.677754v1",
+    "local_path": "",
+    "mime_type": "text/plain",
+    "text": "Background and AimEndoplasmic reticulum (ER) stress is an important contributor to liver disease progression, including alcohol-associated liver disease (ALD). While receptor-interacting protein kinase-3 (RIP3) and mixed lineage kinase domain-like pseudokinase (MLKL) are known for their roles in necroptosis, emerging evidence highlights their non-canonical functions in metabolic regulation and cellular stress responses. However, their specific role in regulating hepatic ER stress remains unclear. This study investigates how RIP3, its kinase activity, and MLKL regulate ER stress pathways during chronic ethanol exposure and pharmacological ER stress induction. MethodsRip3-/-, Rip3K51A/K51A and Mlkl-/- mice alongside WT controls and pharmacological necroptosis inhibitors were used to study the role of RIP3 and MLKL in modulating ER stress. Chronic ethanol feeding and pharmacological agents (tunicamycin, thapsigargin) were utilized to induce ER stress in vivo and in isolated primary hepatocytes. ER stress markers were assessed by qPCR and western blot, ER expansion was evaluated by confocal microscopy, and hepatocyte viability was measured using MTS assay. ResultsChronic ethanol increased expression of ER stress markers in WT mice; this response was attenuated in Rip3-/- mice. Tunicamycin exposure increased hepatic ER stress markers in WT mice; this response was diminished in Rip3-/-, Rip3K51A/K51A and Mlkl-/-mice. In primary hepatocytes, genetic and pharmacological inhibition of RIP3 and MLKL also reduced thapsigargin-induced ER stress responses. Hepatocytes isolated from Rip3-/-, Rip3K51A/K51Aand Mlkl-/- mice exhibited enhanced cell viability under ER stress conditions compared to hepatocytes from WT mice, which was associated with ER expansion as a potential mechanism for mitigating ER stress. ConclusionThis study highlights a novel function of RIP3 and MLKL in regulating hepatic ER stress responses, expanding their known roles beyond programmed necrosis. Impact and ImplicationsThis study provides new mechanistic insight into how RIP3 and MLKL regulate hepatic ER stress responses, extending their roles beyond necroptosis. By demonstrating that genetic or pharmacological inhibition of Rip3, RIP3 kinase activity and Mlkl attenuates ER stress signaling, reduces cell death, and promotes adaptive ER remodeling, our findings identify these proteins as key modulators of hepatocyte survival under stress. These results are important for researchers and clinicians focused on alcohol-associated liver disease and other ER stress-driven liver disorders, as they highlight novel therapeutic targets. In practical terms, modulation of the RIP3- MLKL axis could inform the development of interventions aimed at enhancing ER stress resilience, with potential applications in drug development for ER stress-associated liver injury.",
+    "updated_at": "2026-06-04T10:15:59+00:00"
+  },
+  {
+    "content_asset_id": "asset_d438bff1eeb5ee78",
+    "paper_id": "paper_61317ea1c6e45c14",
+    "source_record_id": "source_f91eaf2d86be958e",
+    "source": "biorxiv",
+    "content_type": "abstract",
+    "status": "available",
+    "remote_url": "https://www.biorxiv.org/content/10.1101/2022.08.02.502466v1",
+    "local_path": "",
+    "mime_type": "text/plain",
+    "text": "Glabridin, a polyphenolic flavonoid isolated from the root of the glycyrrhiza glabra, has been demonstrated to have anti-tumor properties in human malignancies. This study found that glabridin decreased the viability of human breast cancer MDA-MB-231 and MCF7 cells in a dose-dependent manner that was not involved in the caspase-3 cascade. Glabridin promoted the formation of extensive cytoplasmic vacuolation by increasing the expression of endoplasmic reticulum (ER) stress markers BiP, XBP1s, and CHOP. The transmission electron microscopy and fluorescence with the ER chaperon KDEL suggested that the vacuoles were derived from ER. Glabridin-induced vacuolation was blocked when protein synthesis was inhibited by cycloheximide, demonstrating that protein synthesis is crucial for this process. Furthermore, we determined that glabridin causes loss of mitochondrial membrane potential as well as the production of reactive oxygen species, both of which lead to mitochondrial dysfunction. These features are consistent with a kind of programmed cell death described as paraptosis. This work reports for the first time that glabridin could induce paraptosis-like cell death, which may give new therapeutic approaches for apoptosis-resistant breast cancers.",
+    "updated_at": "2026-06-04T10:16:00+00:00"
+  },
+  {
+    "content_asset_id": "asset_7a678ae91886dad8",
+    "paper_id": "paper_439f89994063b5e5",
+    "source_record_id": "",
+    "source": "biorxiv",
+    "content_type": "biorxiv_jats_xml",
+    "status": "available",
+    "download_status": "downloaded",
+    "remote_url": "https://www.biorxiv.org/content/10.1101/2024.08.07.606501v1.source.xml",
+    "local_path": "data/manual_biorxiv_xml/2024.08.07.606501.source.xml",
+    "mime_type": "application/xml",
+    "text": ""
   }
 ]

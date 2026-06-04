@@ -34,7 +34,7 @@ ANSWER_STYLE_CHOICES = ("evidence", "scientist")
 MAX_CONTEXT_CHARS_PER_NODE = 1600
 CHINESE_CHAR_RE = re.compile(r"[\u4e00-\u9fff]")
 QUERY_TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
-NODE_ID_RE = re.compile(r"[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+")
+NODE_ID_RE = re.compile(r"[A-Za-z0-9_.-]+(?::[A-Za-z0-9_.-]+){2,3}")
 CITATION_BRACKET_RE = re.compile(
     rf"\[([^\[\]]*(?:{NODE_ID_RE.pattern}|PMC\d+|paper_[A-Za-z0-9_-]+)[^\[\]]*)\]"
 )
