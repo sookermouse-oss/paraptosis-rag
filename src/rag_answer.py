@@ -5,6 +5,7 @@ import json
 import os
 import re
 from collections import Counter
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,8 @@ from search_nodes import filter_nodes, load_nodes
 
 DEFAULT_TOP_K = 8
 DEFAULT_OPENAI_MODEL = "gpt-5-mini"
+DEFAULT_OPENAI_REASONING_EFFORT = "medium"
+DEFAULT_OPENAI_TIMEOUT_SECONDS = 120
 DEFAULT_EXCLUDED_SECTION_TYPES = ["methods"]
 DEFAULT_TERMINOLOGY_PATH = Path("config/terminology_zh_en.json")
 DEFAULT_ANSWER_STYLE = "scientist"
@@ -31,6 +34,10 @@ ANSWER_STYLE_CHOICES = ("evidence", "scientist")
 MAX_CONTEXT_CHARS_PER_NODE = 1600
 CHINESE_CHAR_RE = re.compile(r"[\u4e00-\u9fff]")
 QUERY_TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
+NODE_ID_RE = re.compile(r"[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+")
+CITATION_BRACKET_RE = re.compile(
+    rf"\[([^\[\]]*(?:{NODE_ID_RE.pattern}|PMC\d+|paper_[A-Za-z0-9_-]+)[^\[\]]*)\]"
+)
 QUERY_STOPWORDS = {
     "a",
     "an",
@@ -52,6 +59,19 @@ QUERY_STOPWORDS = {
     "with",
 }
 QUERY_ANCHOR_TERMS = {"paraptosis"}
+# English terms that the rewrite model frequently but wrongly substitutes for a
+# glossary term. When the source query maps to the canonical key, any of these
+# siblings appearing in the rewrite is a mistranslation and is stripped out.
+# Extend per anchor as new confusions show up in eval.
+CONFUSABLE_TRANSLATIONS: dict[str, tuple[str, ...]] = {
+    "paraptosis": (
+        "parthanatos",
+        "secondary apoptosis",
+        "para-apoptosis",
+        "paraapoptosis",
+        "aponecrosis",
+    ),
+}
 OPENAI_NETWORK_ERROR_HINT = (
     "OpenAI request failed before a response was returned. "
     "This is usually a network/proxy issue, an unavailable upstream service, or a timeout. "
@@ -192,7 +212,7 @@ def run_rag_pipeline(
     node_lookup = {node["node_id"]: node for node in all_nodes}
     index = load_index(storage_dir, embedding_model)
     original_query = query
-    normalized_query = normalize_retrieval_query(
+    normalized_query, query_audit = normalize_retrieval_query(
         original_query,
         openai_model,
         no_query_normalization=no_query_normalization,
@@ -214,6 +234,7 @@ def run_rag_pipeline(
     )
     evidence = enrich_evidence(results, node_lookup, max_context_chars)
     if show_context:
+        print(format_query_audit(query_audit))
         print_context_debug(original_query, normalized_query, evidence)
     if save_context:
         save_context_debug(debug_context_path, original_query, normalized_query, evidence)
@@ -221,6 +242,7 @@ def run_rag_pipeline(
         return {
             "original_query": original_query,
             "normalized_query": normalized_query,
+            "query_audit": asdict(query_audit),
             "answer": insufficient_answer(original_query),
             "evidence": [],
         }
@@ -235,6 +257,7 @@ def run_rag_pipeline(
     return {
         "original_query": original_query,
         "normalized_query": normalized_query,
+        "query_audit": asdict(query_audit),
         "answer": answer,
         "evidence": evidence,
     }
@@ -279,32 +302,130 @@ def contains_chinese(text: str) -> bool:
     return CHINESE_CHAR_RE.search(text) is not None
 
 
+@dataclass
+class QueryAudit:
+    """Snapshot of one query-rewrite, for benchmark visibility into drift.
+
+    normalized == the retrieval query actually used (after the guard).
+    protected  == canonical EN terms whose ZH key was in the source query.
+    removed    == confusable mistranslations the guard stripped.
+    added      == glossary EN terms in the rewrite whose ZH key was NOT in the
+                  source (off-topic drift, e.g. an extra cell-death type).
+    missing    == protected terms the guard had to re-append because the rewrite
+                  dropped them.
+    """
+
+    original: str
+    normalized: str
+    protected: list[str] = field(default_factory=list)
+    removed: list[str] = field(default_factory=list)
+    added: list[str] = field(default_factory=list)
+    missing: list[str] = field(default_factory=list)
+
+
 def normalize_retrieval_query(
     original_query: str,
     openai_model: str,
     no_query_normalization: bool,
-) -> str:
+) -> tuple[str, QueryAudit]:
     if no_query_normalization or not contains_chinese(original_query):
-        return original_query
-    protected_terms = protected_terminology_for_query(original_query)
+        audit = QueryAudit(original=original_query, normalized=original_query)
+        return original_query, audit
+    protected_pairs = protected_terminology_for_query(original_query)
 
     try:
         from openai import OpenAI
     except ImportError as exc:
         raise SystemExit("Missing OpenAI SDK. Install it with `pip install openai`.") from exc
 
-    client = OpenAI()
+    client = OpenAI(timeout=DEFAULT_OPENAI_TIMEOUT_SECONDS)
     response = create_openai_response(
         client,
         stage="query normalization",
         model=openai_model,
-        instructions=QUERY_NORMALIZATION_SYSTEM_PROMPT,
+        instructions=build_query_normalization_instructions(protected_pairs),
         input_text=original_query,
     )
-    normalized = cleanup_normalized_query(response.output_text)
-    if not normalized:
+    raw_rewrite = cleanup_normalized_query(response.output_text)
+    if not raw_rewrite:
         raise SystemExit("Failed to normalize the Chinese query into an English retrieval query.")
-    return ensure_protected_terminology(normalized, protected_terms)
+    final_query = ensure_protected_terminology(raw_rewrite, protected_pairs)
+    audit = audit_query_rewrite(original_query, raw_rewrite, final_query, protected_pairs)
+    return final_query, audit
+
+
+def audit_query_rewrite(
+    original: str,
+    raw_rewrite: str,
+    final_query: str,
+    protected_pairs: list[tuple[str, str]],
+) -> QueryAudit:
+    glossary = load_project_terminology()
+    source_zh = {zh_term for zh_term, _ in protected_pairs}
+    protected = [en_term for _, en_term in protected_pairs]
+
+    removed: list[str] = []
+    for _zh_term, en_term in protected_pairs:
+        for wrong_term in CONFUSABLE_TRANSLATIONS.get(en_term, ()):
+            if english_term_present(raw_rewrite, wrong_term) and wrong_term not in removed:
+                removed.append(wrong_term)
+
+    missing = [
+        en_term for en_term in protected if not english_term_present(raw_rewrite, en_term)
+    ]
+
+    # Off-topic drift: a glossary term shows up in the rewrite, but its Chinese
+    # key was never in the source query. Audited, not deleted (see notes).
+    added = [
+        en_term
+        for zh_term, en_term in glossary.items()
+        if zh_term not in source_zh and english_term_present(final_query, en_term)
+    ]
+
+    return QueryAudit(
+        original=original,
+        normalized=final_query,
+        protected=protected,
+        removed=removed,
+        added=added,
+        missing=missing,
+    )
+
+
+def format_query_audit(audit: QueryAudit) -> str:
+    def show(items: list[str]) -> str:
+        return ", ".join(items) if items else "None"
+
+    return (
+        f"Original:\n{audit.original}\n\n"
+        f"Rewrite:\n{audit.normalized}\n\n"
+        f"Protected:\n{show(audit.protected)}\n\n"
+        f"Removed (mistranslations):\n{show(audit.removed)}\n\n"
+        f"Added (off-topic terms):\n{show(audit.added)}\n\n"
+        f"Missing (re-appended):\n{show(audit.missing)}"
+    )
+
+
+def build_query_normalization_instructions(
+    protected_pairs: list[tuple[str, str]],
+) -> str:
+    """Append hard terminology constraints so rewrite uses canonical terms."""
+    if not protected_pairs:
+        return QUERY_NORMALIZATION_SYSTEM_PROMPT
+    lines: list[str] = []
+    for zh_term, en_term in protected_pairs:
+        lines.append(f'- Translate "{zh_term}" exactly as "{en_term}".')
+        forbidden = CONFUSABLE_TRANSLATIONS.get(en_term, ())
+        if forbidden:
+            joined = ", ".join(f'"{term}"' for term in forbidden)
+            lines.append(
+                f'  Never render "{zh_term}" as {joined}, or any other cell-death term.'
+            )
+    glossary_block = (
+        "Mandatory terminology (use these exact English terms, no synonyms):\n"
+        + "\n".join(lines)
+    )
+    return f"{QUERY_NORMALIZATION_SYSTEM_PROMPT}\n{glossary_block}\n"
 
 
 def load_project_terminology(path: Path = DEFAULT_TERMINOLOGY_PATH) -> dict[str, str]:
@@ -325,10 +446,10 @@ def load_project_terminology(path: Path = DEFAULT_TERMINOLOGY_PATH) -> dict[str,
     return terminology
 
 
-def protected_terminology_for_query(query: str) -> list[str]:
+def protected_terminology_for_query(query: str) -> list[tuple[str, str]]:
     terminology = load_project_terminology()
     occupied = [False] * len(query)
-    protected_terms: list[str] = []
+    protected_pairs: list[tuple[str, str]] = []
     for zh_term, en_term in sorted(terminology.items(), key=lambda item: len(item[0]), reverse=True):
         start = 0
         while True:
@@ -337,23 +458,41 @@ def protected_terminology_for_query(query: str) -> list[str]:
                 break
             end = index + len(zh_term)
             if not any(occupied[index:end]):
-                protected_terms.append(en_term)
+                protected_pairs.append((zh_term, en_term))
                 for position in range(index, end):
                     occupied[position] = True
                 break
             start = end
-    return protected_terms
+    return protected_pairs
 
 
-def ensure_protected_terminology(normalized_query: str, protected_terms: list[str]) -> str:
-    missing_terms = [
-        term
-        for term in protected_terms
-        if not english_term_present(normalized_query, term)
-    ]
-    if not missing_terms:
-        return normalized_query
-    return f"{normalized_query} {' '.join(missing_terms)}"
+def ensure_protected_terminology(
+    normalized_query: str,
+    protected_pairs: list[tuple[str, str]],
+) -> str:
+    result = normalized_query
+    # Remove confusable mistranslations the rewrite may have introduced
+    # (for example, 副凋亡 -> "parthanatos"), so retrieval is not pulled off-topic.
+    for _zh_term, en_term in protected_pairs:
+        for wrong_term in CONFUSABLE_TRANSLATIONS.get(en_term, ()):
+            result = remove_english_term(result, wrong_term)
+    result = " ".join(result.split()).strip()
+
+    missing_terms: list[str] = []
+    for _zh_term, en_term in protected_pairs:
+        if not english_term_present(result, en_term) and en_term not in missing_terms:
+            missing_terms.append(en_term)
+    if missing_terms:
+        result = result.rstrip(" \t\r\n?.!:;")
+        result = f"{result} {' '.join(missing_terms)}".strip()
+    return result
+
+
+def remove_english_term(text: str, term: str) -> str:
+    # Strip the term plus an optional immediately-following parenthetical gloss,
+    # e.g. "parthanatos (PARP-dependent cell death)" -> "".
+    pattern = rf"(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])(\s*\([^()]*\))?"
+    return re.sub(pattern, " ", text, flags=re.IGNORECASE)
 
 
 def english_term_present(text: str, term: str) -> bool:
@@ -393,7 +532,7 @@ def call_openai(
     except ImportError as exc:
         raise SystemExit("Missing OpenAI SDK. Install it with `pip install openai`.") from exc
 
-    client = OpenAI()
+    client = OpenAI(timeout=DEFAULT_OPENAI_TIMEOUT_SECONDS)
     original_query = query
     normalized_query = normalized_query or query
     response = create_openai_response(
@@ -403,7 +542,7 @@ def call_openai(
         instructions=build_system_prompt(original_query, answer_style),
         input_text=build_user_prompt(original_query, normalized_query, evidence),
     )
-    return response.output_text.strip()
+    return sanitize_answer_citations(response.output_text.strip(), evidence)
 
 
 def create_openai_response(
@@ -419,11 +558,53 @@ def create_openai_response(
             instructions=instructions,
             input=input_text,
             store=False,
+            **openai_reasoning_kwargs(model),
         )
     except Exception as exc:
         if is_openai_network_error(exc):
             raise SystemExit(openai_error_message(stage, exc)) from exc
         raise
+
+
+def openai_reasoning_kwargs(model: str) -> dict[str, Any]:
+    if model == DEFAULT_OPENAI_MODEL:
+        return {"reasoning": {"effort": DEFAULT_OPENAI_REASONING_EFFORT}}
+    return {}
+
+
+def sanitize_answer_citations(answer: str, evidence: list[dict[str, Any]]) -> str:
+    allowed_ids = {
+        str(item.get("node_id"))
+        for item in evidence
+        if item.get("node_id")
+    }
+    if not allowed_ids:
+        return strip_all_node_citations(answer)
+
+    def replace_bracket(match: re.Match[str]) -> str:
+        citation_text = match.group(1)
+        valid_ids = []
+        for node_id in NODE_ID_RE.findall(citation_text):
+            if node_id in allowed_ids and node_id not in valid_ids:
+                valid_ids.append(node_id)
+        if not valid_ids:
+            return ""
+        return "[" + "; ".join(valid_ids) + "]"
+
+    cleaned = CITATION_BRACKET_RE.sub(replace_bracket, answer)
+    return cleanup_citation_whitespace(cleaned)
+
+
+def strip_all_node_citations(answer: str) -> str:
+    return cleanup_citation_whitespace(CITATION_BRACKET_RE.sub("", answer))
+
+
+def cleanup_citation_whitespace(text: str) -> str:
+    text = re.sub(r"[ \t]+([,.;:])", r"\1", text)
+    text = re.sub(r"\s+\n", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r" {2,}", " ", text)
+    return text.strip()
 
 
 def is_openai_network_error(exc: Exception) -> bool:
@@ -470,6 +651,11 @@ def build_system_prompt(original_query: str, answer_style: str = DEFAULT_ANSWER_
 
 def build_user_prompt(original_query: str, normalized_query: str, evidence: list[dict[str, Any]]) -> str:
     context_blocks = []
+    allowed_citations = [
+        str(item.get("node_id"))
+        for item in evidence
+        if item.get("node_id")
+    ]
     for index, item in enumerate(evidence, start=1):
         context_blocks.append(
             "\n".join(
@@ -494,6 +680,9 @@ def build_user_prompt(original_query: str, normalized_query: str, evidence: list
             'Do not use the phrase "Short answer:".',
             "Every key conclusion must include one or more exact full node_id citations, e.g. [PMC123:sec1:chunk0].",
             "Do not cite only the PMCID when a full node_id is available.",
+            "Allowed citation node_ids:",
+            "\n".join(allowed_citations),
+            "Never cite a node_id that is not in the allowed citation list.",
         ]
     )
 

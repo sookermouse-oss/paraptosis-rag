@@ -1,0 +1,77 @@
+# HIGH (RAG should clearly outperform GPT)
+
+## Mechanism
+How does ER stress induce paraptosis?
+What role does calcium homeostasis play in paraptosis?
+How do reactive oxygen species (ROS) contribute to paraptosis?
+How does MAPK/ERK signaling participate in paraptosis?
+What is the role of JNK activation in paraptosis?
+
+## Molecular regulators
+What is the role of PI4KB in paraptosis?
+How does proteasome inhibition trigger paraptosis?
+What is the function of Alix (AIP1) in regulating paraptosis?
+How does mitochondrial dysfunction contribute to paraptosis?
+
+## Translational
+Can paraptosis overcome chemotherapy resistance?
+Can paraptosis be exploited as an anticancer strategy?
+What evidence links paraptosis to breast cancer prognosis?
+
+# MEDIUM (GPT can answer partially; RAG should be more specific)
+
+## Reviews
+What are the defining features of paraptosis?
+How is paraptosis different from apoptosis?
+How is paraptosis different from necroptosis?
+How is paraptosis different from ferroptosis?
+What biomarkers are commonly used to identify paraptosis?
+What organelles are involved in paraptosis?
+Is paraptosis caspase dependent?
+What signaling pathways are most frequently associated with paraptosis?
+
+# LOW (RAG should learn to say "unknown")
+
+What is the role of paraptosis in Alzheimer's disease?
+What is the role of paraptosis in Parkinson's disease?
+Does paraptosis regulate circadian rhythm?
+What is the relationship between paraptosis and aging?
+How does paraptosis influence embryonic development?
+What is the relationship between paraptosis and exercise adaptation?
+Does paraptosis affect weather-related stress responses?
+What is the role of paraptosis in plant immunity?
+
+# Query Rewrite Stress Test
+
+Can programmed vacuolar cell death overcome drug resistance?
+How does ER swelling lead to non-apoptotic vacuolating cell death?
+
+# HIGH (recent 2024-2026 corpus-specific questions)
+
+## Gene-specific and prognostic models
+What role does PI4KB play in paraptosis-related breast cancer prognosis models?
+How is PI4KB linked to the ER stress-AKT/MAPK axis in paraptosis-related breast cancer?
+What happens to breast cancer cells when PI4KB is knocked down?
+What does USP10 represent in paraptosis-related prognostic models?
+Why is LCK included in a paraptosis-related breast cancer risk score?
+How does the paraptosis-related risk score (PRRS) predict breast cancer prognosis?
+How is PRRS associated with the breast cancer tumor immune microenvironment?
+
+## Recent therapeutic mechanisms
+How does mitocurcumin induce ROS/JNK-mediated paraptosis to overcome chemoresistance in NSCLC?
+What is the relationship between ATP6V0D1, neuroblastoma chemoresistance, and ellipticine-induced cytoplasmic vacuolation?
+Is ellipticine-induced cytoplasmic vacuolation related to paraptosis?
+Can alpha-Hederin suppress chemo-resistant colorectal cancer cells through Ca2+/MAPK-mediated paraptosis?
+How does diphenyl disulfide induce ROS-mediated ER-stress paraptosis in breast cancer cells?
+How does a cyclometalated iridium(III) complex induce paraptosis in triple-negative breast cancer cells?
+Why can hemicyanine electrophiles induce paraptosis?
+How does a ROS-amplifying nanocatalyst induce multi-organelle stress paraptosis and enhance cancer immunotherapy?
+
+## Emerging applications and cancer subtypes
+What is the crosstalk between autophagy and paraptosis in cancer therapy?
+Can paraptosis be used as a senolytic mechanism?
+How does Rhodiola rosea extract exert senolytic activity through paraptosis?
+How are paraptosis-related genes used to build prognostic biomarkers in lung adenocarcinoma?
+How do paraptosis-related subtypes shape the tumor microenvironment in renal cell carcinoma?
+How is a paraptosis-related risk signature used for prognosis and immunotherapy assessment in gastric cancer?
+What common themes appear across paraptosis-related prognostic signatures in breast, gastric, lung, and renal cancers?

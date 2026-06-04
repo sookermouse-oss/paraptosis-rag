@@ -375,6 +375,33 @@ HF_HUB_OFFLINE=1 HF_HUB_DISABLE_XET=1 \
 
 The benchmark report does not automatically score correctness. It records question, retrieval strength, evidence diversity, top scores, coverage, GPT-only answer, and RAG answer for manual review.
 
+Run claim-level faithfulness checks on a GPT-only vs RAG report:
+
+```bash
+./scripts/rag-faithfulness.sh
+```
+
+The default command checks `data/eval_en_gpt_vs_rag.md` and writes:
+
+```bash
+data/eval_en_faithfulness.json
+data/eval_en_faithfulness.md
+```
+
+By default this is deterministic and does not call OpenAI. It splits the RAG answer into claims, checks whether substantive claims have valid retrieved node citations, strips out-of-corpus citations, and reports bare claims. LLM judge mode is off by default.
+
+To enable LLM judge against cited/retrieved chunk text:
+
+```bash
+./scripts/rag-faithfulness.sh \
+  data/eval_en_gpt_vs_rag.md \
+  --judge \
+  --start-question 1 \
+  --end-question 5
+```
+
+Use `--judge` only when you want OpenAI calls; `OPENAI_API_KEY` is required in that mode.
+
 The current Chinese benchmark is intentionally mixed:
 
 | Group | Purpose |
@@ -444,10 +471,11 @@ Run these from the project root:
 ./scripts/rag-answer.sh "Can paraptosis help overcome drug resistance?"
 ./scripts/rag-compare.sh
 ./scripts/rag-eval-zh.sh
+./scripts/rag-faithfulness.sh
 ./scripts/rag-eval-web.sh
 ```
 
-`rag-answer.sh`, `rag-context.sh`, `rag-compare.sh`, `rag-eval-zh.sh`, `rag-eval-web.sh`, and `src/benchmark_zh_rag_vs_gpt.py` use the OpenAI API through `OPENAI_API_KEY`. `rag-context.sh` also writes the latest debug context to `data/debug_context.txt`.
+`rag-answer.sh`, `rag-context.sh`, `rag-compare.sh`, `rag-eval-zh.sh`, `rag-eval-web.sh`, and `src/benchmark_zh_rag_vs_gpt.py` use the OpenAI API through `OPENAI_API_KEY`. `rag-faithfulness.sh` uses OpenAI only when `--judge` is passed. `rag-context.sh` also writes the latest debug context to `data/debug_context.txt`.
 
 Most RAG scripts set `HF_HUB_OFFLINE=1` by default through their shell wrappers, so the HuggingFace embedding model is loaded from local cache first. If the model is missing locally, run the build/search command without offline mode once to populate the cache.
 
@@ -462,6 +490,8 @@ Most large or frequently regenerated local outputs are intentionally not committ
 | `data/eval_zh_answers.md` | Chinese RAG-only benchmark report. |
 | `data/eval_zh_gpt_vs_rag.md` | Reusable GPT-only vs RAG baseline report. |
 | `data/eval_zh_gpt_vs_rag_*.md` | Ad hoc GPT-only vs RAG benchmark reports. |
+| `data/eval_en_faithfulness.md` | Claim-level faithfulness report for the English GPT-only vs RAG report. |
+| `data/eval_en_faithfulness.json` | Machine-readable faithfulness details. |
 | `data/eval_zh_web*.md` | Web-triggered benchmark reports. |
 | `fulltext_xml/` | Downloaded PMC/JATS XML files. |
 

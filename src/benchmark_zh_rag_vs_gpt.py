@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import os
 import re
 from pathlib import Path
@@ -30,26 +31,44 @@ DEFAULT_QUESTIONS_PATH = Path("data/eval_zh_questions.txt")
 DEFAULT_OUTPUT_PATH = Path("data/eval_zh_gpt_vs_rag.md")
 DEFAULT_EXCLUDED_SECTION_TYPES = ["methods"]
 QUESTION_RE = re.compile(r"^\s*(\d+)\.\s*(.+?)\s*$")
+HEADING_RE = re.compile(r"^(#+)\s*(.+?)\s*$")
 
 
 def load_questions(path: Path) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     current_group = ""
+    current_topic = ""
     for line in path.read_text(encoding="utf-8").splitlines():
         stripped = line.strip()
         if not stripped:
             continue
-        if stripped.startswith("#"):
-            current_group = stripped.lstrip("#").strip()
+        heading_match = HEADING_RE.match(stripped)
+        if heading_match:
+            level = len(heading_match.group(1))
+            heading = heading_match.group(2)
+            if level == 1:
+                current_group = heading
+                current_topic = ""
+            else:
+                current_topic = heading
             continue
         match = QUESTION_RE.match(stripped)
-        if not match:
+        if match:
+            number = match.group(1)
+            question = match.group(2)
+        elif stripped.endswith("?") or stripped.endswith("？"):
+            number = str(len(rows) + 1)
+            question = stripped
+        else:
             continue
+        group = current_group
+        if current_topic:
+            group = f"{current_group} / {current_topic}" if current_group else current_topic
         rows.append(
             {
-                "number": match.group(1),
-                "question": match.group(2),
-                "group": current_group,
+                "number": number,
+                "question": question,
+                "group": group,
             }
         )
     return rows
@@ -64,12 +83,24 @@ def run_comparison(
     top_k: int,
     exclude_section_types: list[str],
     max_context_chars: int,
+    questions_path: Path,
+    output_path: Path,
+    checkpoint_path: Path,
+    resume: bool,
 ) -> list[dict[str, Any]]:
     if not os.environ.get("OPENAI_API_KEY"):
         raise SystemExit("OPENAI_API_KEY is not set.")
 
-    rows: list[dict[str, Any]] = []
+    rows = load_checkpoint(checkpoint_path) if resume else []
+    completed_numbers = {row["number"] for row in rows}
+    if rows:
+        write_markdown(rows, output_path, questions_path)
+        print(f"Loaded {len(rows)} checkpointed results from {checkpoint_path}", flush=True)
+
     for index, item in enumerate(questions, start=1):
+        if item["number"] in completed_numbers:
+            print(f"Skipping Q{item['number']} ({index}/{len(questions)}): already checkpointed", flush=True)
+            continue
         question = item["question"]
         print(f"Running Q{item['number']} ({index}/{len(questions)}): {question}", flush=True)
 
@@ -110,13 +141,64 @@ def run_comparison(
                 "rag_answer": rag_result["answer"],
             }
         )
+        append_checkpoint(checkpoint_path, rows[-1])
+        write_markdown(rows, output_path, questions_path)
+        print(f"Checkpointed Q{item['number']} to {checkpoint_path}", flush=True)
     return rows
+
+
+def load_checkpoint(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    seen_numbers: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        number = str(row.get("number", ""))
+        if number and number not in seen_numbers:
+            rows.append(row)
+            seen_numbers.add(number)
+    return rows
+
+
+def append_checkpoint(path: Path, row: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as out:
+        out.write(json.dumps(row, ensure_ascii=False))
+        out.write("\n")
+
+
+def checkpoint_path_for_output(output_path: Path) -> Path:
+    return output_path.with_suffix(output_path.suffix + ".checkpoint.jsonl")
+
+
+def filter_question_range(
+    questions: list[dict[str, str]],
+    start_question: int | None,
+    end_question: int | None,
+) -> list[dict[str, str]]:
+    if start_question is None and end_question is None:
+        return questions
+    filtered: list[dict[str, str]] = []
+    for item in questions:
+        try:
+            number = int(item["number"])
+        except (TypeError, ValueError):
+            continue
+        if start_question is not None and number < start_question:
+            continue
+        if end_question is not None and number > end_question:
+            continue
+        filtered.append(item)
+    return filtered
 
 
 def write_markdown(rows: list[dict[str, Any]], output_path: Path, questions_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8") as out:
-        out.write("# GPT-only vs RAG 中文对照实验\n\n")
+        out.write("# GPT-only vs RAG Benchmark\n\n")
         out.write(f"Generated: {dt.datetime.now().isoformat(timespec='seconds')}\n\n")
         out.write(f"Questions file: `{questions_path}`\n\n")
         out.write("No automatic correctness scoring is applied.\n\n")
@@ -148,7 +230,7 @@ def write_markdown(rows: list[dict[str, Any]], output_path: Path, questions_path
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run Chinese GPT-only vs RAG benchmark without scoring.")
+    parser = argparse.ArgumentParser(description="Run GPT-only vs RAG benchmark without scoring.")
     parser.add_argument("--questions", type=Path, default=DEFAULT_QUESTIONS_PATH)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT_PATH)
     parser.add_argument("--nodes", type=Path, default=DEFAULT_NODES_PATH)
@@ -163,9 +245,29 @@ def main() -> None:
         help="Section type to exclude. Defaults to methods. Can be passed multiple times.",
     )
     parser.add_argument("--max-context-chars", type=int, default=MAX_CONTEXT_CHARS_PER_NODE)
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from the checkpoint file and skip completed questions.",
+    )
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=None,
+        help="Checkpoint JSONL path. Default: <output>.checkpoint.jsonl",
+    )
+    parser.add_argument("--start-question", type=int, default=None, help="Only run questions with number >= this value.")
+    parser.add_argument("--end-question", type=int, default=None, help="Only run questions with number <= this value.")
     args = parser.parse_args()
 
-    questions = load_questions(args.questions)
+    questions = filter_question_range(
+        load_questions(args.questions),
+        args.start_question,
+        args.end_question,
+    )
+    checkpoint_path = args.checkpoint or checkpoint_path_for_output(args.output)
+    if not args.resume and checkpoint_path.exists():
+        checkpoint_path.unlink()
     rows = run_comparison(
         questions=questions,
         nodes_path=args.nodes,
@@ -175,9 +277,14 @@ def main() -> None:
         top_k=args.top_k,
         exclude_section_types=args.exclude_section_type,
         max_context_chars=args.max_context_chars,
+        questions_path=args.questions,
+        output_path=args.output,
+        checkpoint_path=checkpoint_path,
+        resume=args.resume,
     )
     write_markdown(rows, args.output, args.questions)
     print(f"Wrote {args.output}", flush=True)
+    print(f"Checkpoint: {checkpoint_path}", flush=True)
 
 
 if __name__ == "__main__":

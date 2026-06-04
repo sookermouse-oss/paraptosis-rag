@@ -18,10 +18,12 @@ from hybrid_retrieval import (
 )
 from rag_answer import (
     DEFAULT_OPENAI_MODEL,
+    DEFAULT_OPENAI_TIMEOUT_SECONDS,
     DEFAULT_TOP_K,
     MAX_CONTEXT_CHARS_PER_NODE,
     call_openai,
     enrich_evidence,
+    openai_reasoning_kwargs,
 )
 from search_nodes import filter_nodes, load_nodes
 
@@ -99,12 +101,13 @@ def call_gpt_only(openai_model: str, query: str) -> str:
     except ImportError as exc:
         raise SystemExit("Missing OpenAI SDK. Install it with `pip install openai`.") from exc
 
-    client = OpenAI()
+    client = OpenAI(timeout=DEFAULT_OPENAI_TIMEOUT_SECONDS)
     response = client.responses.create(
         model=openai_model,
         instructions=GPT_ONLY_INSTRUCTIONS,
         input=query,
         store=False,
+        **openai_reasoning_kwargs(openai_model),
     )
     return response.output_text.strip()
 
